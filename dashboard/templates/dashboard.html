@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Genpact SAP Validator V4</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#222536;
+  --border:#2e3248;--text:#e2e4f0;--muted:#7c82a0;
+  --pass:#22c55e;--fail:#ef4444;--warn:#f59e0b;
+  --info:#3b82f6;--accent:#6366f1;--accent2:#4f46e5;
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 18px;
+  display:flex;align-items:center;justify-content:space-between;height:52px;gap:8px}
+.logo{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.logo-mark{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.logo-text span{color:var(--accent)}
+.hdr-r{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.hbtn{border:none;padding:5px 13px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500;transition:opacity .2s;white-space:nowrap}
+.hbtn-accent{background:var(--accent);color:#fff}
+.hbtn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.hbtn:hover:not(:disabled){opacity:.82}
+.hbtn:disabled{opacity:.4;cursor:default}
+.last-scan{font-size:11px;color:var(--muted);white-space:nowrap}
+.thr-badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;
+  background:rgba(99,102,241,.15);color:#a5b4fc;border:1px solid rgba(99,102,241,.2);white-space:nowrap}
+.layout{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 52px)}
+aside{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sb-head{padding:12px 14px 6px;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+#table-list{flex:1;overflow-y:auto}
+.sb-item{display:flex;align-items:center;padding:9px 14px;cursor:pointer;border-left:2px solid transparent;transition:background .14s;font-size:12px;gap:7px}
+.sb-item:hover{background:var(--surface2)}
+.sb-item.active{background:var(--surface2);border-left-color:var(--accent)}
+.tname{font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;flex-shrink:0;white-space:nowrap}
+.sp-new{background:rgba(59,130,246,.2);color:#60a5fa}
+.sp-chg{background:rgba(245,158,11,.2);color:var(--warn)}
+.sp-val{background:rgba(99,102,241,.2);color:#a5b4fc;animation:blink .8s infinite}
+.sp-pass{background:rgba(34,197,94,.15);color:var(--pass)}
+.sp-warn{background:rgba(245,158,11,.15);color:var(--warn)}
+.sp-fail{background:rgba(239,68,68,.15);color:var(--fail)}
+.sp-err{background:rgba(239,68,68,.15);color:var(--fail)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+.sb-unmatched{padding:6px 14px;font-size:11px;color:var(--warn);display:flex;gap:5px;align-items:center}
+.sb-footer{border-top:1px solid var(--border);padding:8px;display:flex;gap:6px}
+.ub{flex:1;font-size:10px;padding:5px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--muted);text-align:center;cursor:pointer;transition:background .14s}
+.ub:hover{background:var(--surface2);color:var(--text)}
+main{overflow-y:auto;padding:20px}
+#welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:18px;text-align:center}
+#welcome h2{font-size:20px;font-weight:600}
+#welcome h2 span{color:var(--accent)}
+#welcome p{color:var(--muted);font-size:13px;max-width:500px;line-height:1.6}
+.upload-zone{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:14px;min-width:460px}
+.upload-box{background:var(--surface2);border:1px dashed var(--border);border-radius:8px;padding:16px;text-align:center}
+.upload-box h4{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px}
+.ubtn{display:inline-block;background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;width:100%;margin-bottom:7px}
+.ubtn:hover{opacity:.85}
+.uhint{font-size:10px;color:var(--muted)}
+.ustatus{font-size:11px;margin-top:5px;min-height:15px}
+#detail{display:none}
+.det-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;gap:12px}
+.det-title{font-size:17px;font-weight:600}
+.det-meta{font-size:11px;color:var(--muted);margin-top:3px}
+.det-right{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.st-pill{font-size:12px;font-weight:600;padding:5px 14px;border-radius:20px}
+.pill-pass{background:rgba(34,197,94,.15);color:var(--pass)}
+.pill-warn{background:rgba(245,158,11,.15);color:var(--warn)}
+.pill-fail{background:rgba(239,68,68,.15);color:var(--fail)}
+.pill-err{background:rgba(245,158,11,.15);color:var(--warn)}
+.dl-btn{background:rgba(99,102,241,.15);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.dl-btn:hover{background:rgba(99,102,241,.25)}
+.dl-btn.disabled{opacity:.4;pointer-events:none}
+.thr-info{display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:6px;padding:4px 10px;font-size:11px;color:#a5b4fc;margin-bottom:14px}
+.banner{display:flex;align-items:center;gap:9px;padding:9px 13px;border-radius:8px;margin-bottom:16px;font-size:12px}
+.bn-val{background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);color:#a5b4fc}
+.bn-chg{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:var(--warn)}
+.spinner{width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:18px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:13px 14px}
+.card .n{font-size:22px;font-weight:600}
+.card .l{font-size:10px;color:var(--muted);margin-top:2px}
+.card.ok .n{color:var(--pass)}
+.card.warn .n{color:var(--fail)}
+.card.blue .n{color:#60a5fa}
+.sec{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:18px 0 9px}
+.tbl-wrap{border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-bottom:20px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--surface2);color:var(--muted);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:8px 11px;text-align:left}
+td{padding:8px 11px;border-top:1px solid var(--border)}
+tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+tr:hover td{background:var(--surface2)}
+.fl{font-weight:500}
+.ft{font-size:10px;color:var(--muted);margin-top:2px}
+.tn{font-size:10px;color:var(--info);font-weight:600}
+.ts{font-size:10px;color:var(--muted)}
+.bar-w{display:flex;align-items:center;gap:6px}
+.bar-bg{height:4px;border-radius:2px;background:var(--border);flex:1}
+.bar-f{height:100%;border-radius:2px}
+.bar-v{font-size:11px;font-weight:600;min-width:36px;text-align:right}
+.bdg{font-size:10px;font-weight:600;padding:2px 7px;border-radius:8px}
+.b-pass{background:rgba(34,197,94,.15);color:var(--pass)}
+.b-fail{background:rgba(239,68,68,.15);color:var(--fail)}
+.exp-icon{color:var(--muted);font-size:10px;transition:transform .18s;cursor:pointer}
+.exp-icon.open{transform:rotate(90deg)}
+.miss-row{display:none}
+.miss-row td{padding:0}
+.miss-inner{padding:8px 11px 11px 24px}
+.miss-inner table{border:1px solid var(--border);border-radius:6px;overflow:hidden;font-size:11px}
+.miss-inner td{background:var(--bg)}
+.dold{color:var(--fail)}
+.dnew{color:var(--pass)}
+.map-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.map-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:11px 13px}
+.map-box h5{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}
+.mtag{display:inline-flex;flex-direction:column;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;margin:2px;font-size:11px}
+.mtag small{font-size:9px;color:var(--muted)}
+.mtag.num{border-color:rgba(59,130,246,.4);color:var(--info)}
+.mtag.num small{color:var(--info);opacity:.7}
+.mtag.w{border-color:rgba(245,158,11,.4);color:var(--warn)}
+.mtag.cross{border-color:rgba(99,102,241,.4);color:#a5b4fc}
+.mtag.cross small{color:var(--accent);opacity:.8}
+.err-box{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:11px 14px;color:var(--fail);font-size:12px;margin-bottom:16px}
+#toast-container{position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column-reverse;gap:7px;z-index:200}
+.toast{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 15px;font-size:12px;max-width:310px;box-shadow:0 4px 14px rgba(0,0,0,.4);display:flex;align-items:flex-start;gap:8px;animation:sli .22s ease}
+.toast.rm{animation:slo .22s ease forwards}
+.toast-m{flex:1;line-height:1.45}
+.toast.info{border-left:3px solid var(--info)}
+.toast.success{border-left:3px solid var(--pass)}
+.toast.warn{border-left:3px solid var(--warn)}
+.toast.error{border-left:3px solid var(--fail)}
+@keyframes sli{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+@keyframes slo{to{opacity:0;transform:translateX(16px)}}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:11px;width:600px;max-height:84vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-hd{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-hd h3{font-size:14px;font-weight:600}
+.mclose{background:none;border:none;color:var(--muted);font-size:19px;cursor:pointer;line-height:1}
+.mclose:hover{color:var(--text)}
+.modal-body{overflow-y:auto;padding:16px 18px}
+.le{display:flex;gap:9px;padding:6px 9px;border-radius:5px;font-size:11px;margin-bottom:3px;border-left:3px solid transparent}
+.le.info{border-color:var(--info);background:rgba(59,130,246,.05)}
+.le.success{border-color:var(--pass);background:rgba(34,197,94,.05)}
+.le.warn{border-color:var(--warn);background:rgba(245,158,11,.05)}
+.le.error{border-color:var(--fail);background:rgba(239,68,68,.05)}
+.le-ts{color:var(--muted);flex-shrink:0;font-family:monospace;font-size:10px;padding-top:1px}
+.le-m{flex:1;line-height:1.45}
+.rep-row{display:flex;align-items:center;padding:8px 10px;border-radius:7px;margin-bottom:5px;background:var(--surface2);font-size:12px;gap:10px}
+.rep-nm{font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rep-mt{font-size:10px;color:var(--muted);white-space:nowrap}
+.rep-dl{background:rgba(99,102,241,.15);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;text-decoration:none}
+.rep-dl:hover{background:rgba(99,102,241,.25)}
+.s-section{margin-bottom:18px}
+.s-section h4{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px}
+.f-row{display:flex;flex-direction:column;gap:4px;margin-bottom:11px}
+.f-row label{font-size:11px;color:var(--muted)}
+.f-row input[type=text]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 11px;border-radius:6px;font-size:12px;width:100%;outline:none}
+.f-row input[type=text]:focus{border-color:var(--accent)}
+.thr-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.thr-row input[type=range]{flex:1;accent-color:var(--accent)}
+.thr-val{font-size:16px;font-weight:600;color:var(--accent);min-width:44px;text-align:right}
+.thr-note{font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5}
+.save-btn{background:var(--accent);color:#fff;border:none;padding:7px 18px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;transition:opacity .2s}
+.save-btn:hover{opacity:.85}
+.s-status{font-size:11px;margin-top:6px;min-height:16px}
+.divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+.fs-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.fs-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px}
+.fs-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:240px;overflow-y:auto;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px}
+.fc-item{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:4px;cursor:pointer;transition:background .12s}
+.fc-item:hover{background:var(--border)}
+.fc-item input[type=checkbox]{accent-color:var(--accent);cursor:pointer;width:13px;height:13px}
+.fc-label{font-size:11px;color:var(--text);flex:1}
+.fc-tech{font-size:9px;color:var(--muted)}
+.fs-btns{display:flex;gap:5px;flex-wrap:wrap}
+.fs-btn{font-size:11px;padding:4px 11px;border:1px solid var(--border);border-radius:5px;background:transparent;color:var(--muted);cursor:pointer;transition:all .12s}
+.fs-btn:hover{background:var(--surface2);color:var(--text)}
+.fs-count{font-size:11px;color:var(--muted);align-self:center;white-space:nowrap}
+.lbl-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.lbl-btn{background:var(--surface2);color:var(--muted);border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:11px;cursor:pointer}
+.lbl-btn:hover{background:var(--border);color:var(--text)}
+.samp-dl{color:#a5b4fc;font-size:11px;font-weight:600;text-decoration:none;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);padding:5px 12px;border-radius:6px}
+.samp-dl:hover{background:rgba(99,102,241,.25)}
+.empty-msg{color:var(--muted);font-size:13px;text-align:center;padding:26px}
+.scanning-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+input[type=file]{display:none}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+/* Upload modal */
+.rename-input{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:11px;width:100%;outline:none}
+.rename-input:focus{border-color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div class="logo-text">Genpact <span>SAP</span> Validator</div>
+  </div>
+  <div class="hdr-r">
+    <span id="scan-ind" style="display:none"><span class="scanning-dot"></span></span>
+    <span class="last-scan" id="last-scan">Not scanned yet</span>
+    <span class="thr-badge" id="thr-badge">Threshold: 100%</span>
+    <button class="hbtn hbtn-ghost" onclick="openLog()">&#128221; Log</button>
+    <button class="hbtn hbtn-ghost" onclick="openReports()">&#128196; Reports</button>
+    <button class="hbtn hbtn-ghost" onclick="openSettings()">&#9881; Settings</button>
+    <button class="hbtn hbtn-accent" id="scan-btn" onclick="triggerScan()">&#8635; Scan Now</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="sb-head">&#128202; Tables</div>
+    <div id="table-list"></div>
+    <div style="flex:1"></div>
+    <div class="sb-footer">
+      <div class="ub" onclick="openUploadModal('source')">&#8679; Source</div>
+      <div class="ub" onclick="openUploadModal('target')">&#8679; Target</div>
+    </div>
+  </aside>
+  <main>
+    <div id="welcome">
+      <h2>Genpact <span>SAP</span> Validator</h2>
+      <p>Upload source and target files. The validator automatically maps SAP 4.7 field names
+         to S/4HANA equivalents (e.g. NAME1 &#8594; NAMORG1, LAND1 &#8594; COUNTRY)
+         so all fields are validated even when names differ.</p>
+      <div class="upload-zone">
+        <div class="upload-box">
+          <h4>&#8679; Source files</h4>
+          <button class="ubtn" onclick="openUploadModal('source')">Browse &amp; Upload</button>
+          <div class="uhint">CSV or XLSX &nbsp;&middot;&nbsp; rename before upload if needed</div>
+          <div class="ustatus" id="src-st"></div>
+        </div>
+        <div class="upload-box">
+          <h4>&#8679; Target files</h4>
+          <button class="ubtn" onclick="openUploadModal('target')">Browse &amp; Upload</button>
+          <div class="uhint">CSV or XLSX &nbsp;&middot;&nbsp; rename before upload if needed</div>
+          <div class="ustatus" id="tgt-st"></div>
+        </div>
+      </div>
+    </div>
+    <div id="detail"></div>
+  </main>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- Upload modal with rename -->
+<div class="overlay" id="upload-modal">
+  <div class="modal" style="width:520px">
+    <div class="modal-hd">
+      <h3 id="upload-modal-title">&#8679; Upload Files</h3>
+      <button class="mclose" onclick="closeModal('upload-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Select one or more files. Use <b>Save as</b> to rename before uploading so source and target
+        files share the same name and pair automatically.
+      </div>
+      <button class="save-btn" style="width:100%;margin-bottom:12px"
+              onclick="document.getElementById('upload-file-input').click()">
+        &#128194; Choose files&hellip;
+      </button>
+      <input type="file" id="upload-file-input" accept=".csv,.xlsx,.xls" multiple
+             onchange="onUploadFilesChosen(this)">
+      <div id="upload-queue" style="display:none">
+        <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;
+                    letter-spacing:.06em;margin-bottom:8px">Files to upload</div>
+        <div id="upload-queue-rows"></div>
+        <button class="save-btn" style="width:100%;margin-top:12px" onclick="confirmUpload()">
+          &#8679; Upload all
+        </button>
+        <div class="s-status" id="upload-status"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Activity log -->
+<div class="overlay" id="log-modal">
+  <div class="modal">
+    <div class="modal-hd"><h3>&#128221; Activity Log</h3><button class="mclose" onclick="closeModal('log-modal')">&times;</button></div>
+    <div class="modal-body" id="log-list"><div class="empty-msg">No activity yet.</div></div>
+  </div>
+</div>
+
+<!-- Excel reports -->
+<div class="overlay" id="rep-modal">
+  <div class="modal">
+    <div class="modal-hd"><h3>&#128196; Excel Reports</h3><button class="mclose" onclick="closeModal('rep-modal')">&times;</button></div>
+    <div class="modal-body" id="rep-list"><div class="empty-msg">Loading&hellip;</div></div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="overlay" id="set-modal">
+  <div class="modal" style="width:660px">
+    <div class="modal-hd"><h3>&#9881; Settings</h3><button class="mclose" onclick="closeModal('set-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="s-section">
+        <h4>&#128194; Watched Folder Paths</h4>
+        <div class="f-row"><label>Source folder</label><input type="text" id="cfg-src" placeholder="e.g. C:\migrations\source"></div>
+        <div class="f-row"><label>Target folder</label><input type="text" id="cfg-tgt" placeholder="e.g. C:\migrations\target"></div>
+        <button class="save-btn" onclick="savePaths()">Save Paths</button>
+        <div class="s-status" id="path-st"></div>
+      </div>
+      <hr class="divider">
+      <div class="s-section">
+        <h4>&#9989; Pass Threshold</h4>
+        <div class="thr-note">A field is marked <b>PASS</b> when its match % is at or above this value. Default 100% = exact. Set 90% to allow 10% variance.</div>
+        <div class="thr-row">
+          <span style="font-size:12px;color:var(--muted)">50%</span>
+          <input type="range" id="thr-slider" min="50" max="100" step="1" value="100" oninput="updateThrDisplay()">
+          <span style="font-size:12px;color:var(--muted)">100%</span>
+          <span class="thr-val" id="thr-display">100%</span>
+        </div>
+        <button class="save-btn" onclick="saveThreshold()">Apply Threshold</button>
+        <div class="s-status" id="thr-st"></div>
+      </div>
+      <hr class="divider">
+      <div class="s-section">
+        <h4>&#128203; Field Selection</h4>
+        <div class="fs-note">Choose which fields to validate. Load fields from files to see all available columns with friendly labels. Leave all checked to validate everything.</div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Load fields from files</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Source file</div>
+              <div style="display:flex;gap:5px">
+                <input type="text" id="prev-src" placeholder="Path or browse..." style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:5px;font-size:11px;outline:none">
+                <button class="fs-btn" style="padding:5px 9px;white-space:nowrap" onclick="document.getElementById('prev-src-file').click()">Browse</button>
+                <input type="file" id="prev-src-file" accept=".csv,.xlsx,.xls" onchange="previewFileSelected('src',this)">
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Target file</div>
+              <div style="display:flex;gap:5px">
+                <input type="text" id="prev-tgt" placeholder="Path or browse..." style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:5px;font-size:11px;outline:none">
+                <button class="fs-btn" style="padding:5px 9px;white-space:nowrap" onclick="document.getElementById('prev-tgt-file').click()">Browse</button>
+                <input type="file" id="prev-tgt-file" accept=".csv,.xlsx,.xls" onchange="previewFileSelected('tgt',this)">
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px">
+            <button class="save-btn" style="font-size:11px;padding:6px 13px" onclick="loadFieldsFromFiles()">&#128269; Load fields</button>
+            <span id="prev-status" style="font-size:11px;color:var(--muted)"></span>
+          </div>
+        </div>
+        <input type="text" id="fs-search" placeholder="Search by field name or SAP code..."
+               style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:11px;width:100%;outline:none;margin-bottom:7px"
+               oninput="filterFieldCheckboxes()">
+        <div id="fs-filter-bar" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px"></div>
+        <div class="fs-header">
+          <div class="fs-btns">
+            <button class="fs-btn" onclick="selectAllFields()">Select all</button>
+            <button class="fs-btn" onclick="clearAllFields()">Clear all</button>
+            <button class="fs-btn" onclick="selectAllVisible()">Select visible</button>
+            <button class="fs-btn" onclick="clearAllVisible()">Clear visible</button>
+          </div>
+          <span class="fs-count" id="fs-count">0 selected</span>
+        </div>
+        <div class="fs-grid" id="field-checkboxes" style="max-height:240px">
+          <div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">Load fields from files above, or run a scan first.</div>
+        </div>
+        <button class="save-btn" style="margin-top:10px" onclick="saveFieldSelection()">Apply Selection</button>
+        <div class="s-status" id="field-st"></div>
+      </div>
+      <hr class="divider">
+      <div class="s-section">
+        <h4>&#127991; Custom Field Labels</h4>
+        <div class="thr-note">Upload a CSV to override field names. Format: <code>FIELD_NAME,YOUR_LABEL</code></div>
+        <div class="lbl-row">
+          <button class="lbl-btn" onclick="document.getElementById('lbl-input').click()">&#128196; Choose label CSV</button>
+          <input type="file" id="lbl-input" accept=".csv" onchange="uploadLabels(this)">
+          <a class="samp-dl" href="/api/labels/sample" download="sample_labels.csv">&#8595; Sample CSV</a>
+        </div>
+        <div class="s-status" id="lbl-st"></div>
+        <div id="lbl-current" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var activeTable=null,allResults={},allStates={},lastLogCount=0;
+var uploadSide='source',uploadFileQueue=[];
+
+function toast(msg,lvl){
+  lvl=lvl||'info';
+  var el=document.createElement('div');
+  el.className='toast '+lvl;
+  el.innerHTML='<span class="toast-m">'+esc(msg)+'</span>';
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(function(){el.classList.add('rm');setTimeout(function(){el.remove()},230)},5000);
+}
+
+async function init(){await refresh();setInterval(refresh,4000);}
+
+async function refresh(){
+  var d=await Promise.all([
+    fetch('/api/status').then(function(r){return r.json()}),
+    fetch('/api/results').then(function(r){return r.json()}),
+    fetch('/api/activity').then(function(r){return r.json()}),
+  ]);
+  var status=d[0],results=d[1],activity=d[2];
+  document.getElementById('scan-ind').style.display=status.scanning?'inline-block':'none';
+  document.getElementById('scan-btn').disabled=status.scanning;
+  if(status.last_scan) document.getElementById('last-scan').textContent='Scanned: '+status.last_scan;
+  var thr=status.pass_threshold||100,sel=status.selected_fields||[];
+  document.getElementById('thr-badge').textContent='Threshold: '+thr+'%'+(sel.length?' | Fields: '+sel.length:'');
+  var newE=activity.slice(0,activity.length-lastLogCount);
+  if(lastLogCount>0) newE.forEach(function(e){toast(e.message,e.level)});
+  lastLogCount=activity.length;
+  allResults={};allStates=status.file_states||{};
+  results.forEach(function(r){allResults[r.name]=r});
+  renderSidebar(status);
+  if(activeTable){
+    var fs=allStates[activeTable];
+    if(fs&&fs.state==='validating') renderValPlaceholder(activeTable,fs);
+    else if(allResults[activeTable]) renderDetail(allResults[activeTable]);
+  }
+}
+
+async function triggerScan(){await fetch('/api/scan',{method:'POST'});setTimeout(refresh,500);}
+
+function renderSidebar(status){
+  var list=document.getElementById('table-list'),html='';
+  status.pairs.forEach(function(pair){
+    var fs=(status.file_states||{})[pair.name]||{},st=fs.state||'';
+    if(!pair.has_pair){
+      html+='<div class="sb-unmatched">&#9888; '+pair.name+' <span style="font-size:10px;opacity:.7">('+
+            (pair.source_path?'no target':'no source')+')</span></div>';
+      return;
+    }
+    var pill='';
+    if(st==='validating')    pill='<span class="sp sp-val">Validating&hellip;</span>';
+    else if(st==='new')      pill='<span class="sp sp-new">New</span>';
+    else if(st==='changed')  pill='<span class="sp sp-chg">Changed</span>';
+    else if(st==='error')    pill='<span class="sp sp-err">Error</span>';
+    else{
+      var r=allResults[pair.name],s=r?r.status:'';
+      if(s==='PASS')         pill='<span class="sp sp-pass">PASS</span>';
+      else if(s==='WARNING') pill='<span class="sp sp-warn">WARNING</span>';
+      else if(s==='FAIL')    pill='<span class="sp sp-fail">FAIL</span>';
+      else if(s==='ERROR')   pill='<span class="sp sp-err">ERROR</span>';
+      else                   pill='<span class="sp sp-new">&hellip;</span>';
+    }
+    var act=activeTable===pair.name?'active':'';
+    html+='<div class="sb-item '+act+'" onclick="selectTable(\''+pair.name+'\',this)">'+
+          '<span class="tname">'+pair.name+'</span>'+pill+'</div>';
+  });
+  if(!html) html='<div style="padding:16px 14px;font-size:12px;color:var(--muted)">No file pairs found.<br>Upload files using the buttons below.</div>';
+  list.innerHTML=html;
+}
+
+function selectTable(name,el){
+  activeTable=name;
+  document.querySelectorAll('.sb-item').forEach(function(e){e.classList.remove('active')});
+  if(el) el.classList.add('active');
+  var fs=allStates[name]||{};
+  if(fs.state==='validating'){renderValPlaceholder(name,fs);return}
+  var r=allResults[name];
+  if(r){renderDetail(r);return}
+  document.getElementById('welcome').style.display='none';
+  document.getElementById('detail').style.display='block';
+  document.getElementById('detail').innerHTML=
+    '<div class="banner bn-val"><span class="spinner"></span>'+
+    '<span><b>'+name+'</b> \u2014 detected, waiting for validation\u2026</span></div>';
+}
+
+function renderValPlaceholder(name,fs){
+  document.getElementById('welcome').style.display='none';
+  document.getElementById('detail').style.display='block';
+  document.getElementById('detail').innerHTML=
+    '<div class="banner bn-val"><span class="spinner"></span>'+
+    '<span><b>'+name+'</b> validating now\u2026 '+
+    (fs.source_file?'('+fs.source_file+' &harr; '+fs.target_file+')':'')+
+    '</span></div>'+
+    '<div style="color:var(--muted);font-size:12px;padding:14px 0">Results will appear automatically.</div>';
+}
+
+function renderDetail(r){
+  document.getElementById('welcome').style.display='none';
+  var det=document.getElementById('detail');
+  det.style.display='block';
+  var pc=r.status==='PASS'?'pill-pass':r.status==='WARNING'?'pill-warn':r.status==='ERROR'?'pill-err':'pill-fail';
+  var fs=allStates[r.name]||{};
+  var thr=r.pass_threshold||100,sel=r.selected_fields||[];
+
+  var banner='';
+  if(fs.state==='changed')
+    banner='<div class="banner bn-chg">&#9888; File changed \u2014 re-validation queued.</div>';
+
+  var dlBtn=r.excel_file
+    ?'<a class="dl-btn" href="/api/download/'+r.name+'" download="'+r.excel_file+'">&#8595; Excel</a>'
+    :'<span class="dl-btn disabled">&#8595; Excel</span>';
+
+  var err=r.errors&&r.errors.length?'<div class="err-box">&#10060; '+r.errors.join('<br>')+'</div>':'';
+
+  var businessMsg=r.business_message
+    ?'<div class="banner '+(r.status==='WARNING'?'bn-chg':'bn-val')+'">'+esc(r.business_message)+'</div>':'';
+
+  var thrInfo='<div class="thr-info">&#9989; Pass threshold: <b>'+thr+'%</b>'
+    +(sel.length?' &nbsp;|&nbsp; Validating <b>'+sel.length+'</b> selected fields':' &nbsp;|&nbsp; All fields')
+    +'</div>';
+
+  var s=r.records_only_in_source,t=r.records_only_in_target;
+  var cards='<div class="cards">'+
+    card(fmt(r.total_source_records),'Source records','')+
+    card(fmt(r.total_target_records),'Target records','')+
+    card(fmt(r.records_matched),'Keys matched','ok')+
+    card(s,'Source only',s?'warn':'')+
+    card(t,'Target only',t?'warn':'')+
+    card(r.fields_passed,'Fields passed','ok')+
+    card(r.fields_failed,'Fields failed',r.fields_failed?'warn':'ok')+
+    card(r.pass_rate_pct+'%','Pass rate','blue')+
+    '</div>';
+
+  // ── Mapping panel ──────────────────────────────────────────────────────────
+  var mapHtml='';
+  if(r.mapping){
+    var m=r.mapping,ml=m.matched_labels||{};
+    var sol=m.source_only_labels||{},tol=m.target_only_labels||{};
+
+    var so=m.source_only_fields&&m.source_only_fields.length
+      ?m.source_only_fields.map(function(f){
+        var lbl=sol[f]||f;
+        return '<span class="mtag w" title="'+esc(f)+'">'+(lbl!==f?lbl+'<small>'+f+'</small>':f)+'</span>';
+      }).join('')
+      :'<span style="color:var(--muted);font-size:10px">none</span>';
+
+    var to2=m.target_only_fields&&m.target_only_fields.length
+      ?m.target_only_fields.map(function(f){
+        var lbl=tol[f]||f;
+        return '<span class="mtag w" title="'+esc(f)+'">'+(lbl!==f?lbl+'<small>'+f+'</small>':f)+'</span>';
+      }).join('')
+      :'<span style="color:var(--muted);font-size:10px">none</span>';
+
+    var nums=m.numeric_fields&&m.numeric_fields.length
+      ?m.numeric_fields.map(function(f){
+        var lbl=ml[f]||f;
+        return '<span class="mtag num">'+esc(lbl)+'<small>'+f+' &plusmn;'+m.tolerance_map[f]+'</small></span>';
+      }).join('')
+      :'<span style="color:var(--muted);font-size:10px">none</span>';
+
+    // Cross-mapped fields panel
+    var fmd=r.field_mapping_detail;
+    var crossMapped='';
+    if(fmd&&fmd.mapped_fields){
+      var aliasMaps=fmd.mapped_fields.filter(function(d){return d.method!=='exact';});
+      if(aliasMaps.length){
+        crossMapped='<div class="map-box" style="grid-column:1/-1"><h5>Cross-name mappings ('+aliasMaps.length+')</h5>'+
+          aliasMaps.map(function(d){
+            var sl=d.source_label||d.source_field,tl=d.target_label||d.target_field;
+            var mc=d.method==='fuzzy'?'rgba(245,158,11,.15)':'rgba(99,102,241,.15)';
+            return '<span class="mtag cross">'+esc(sl)+
+              '<small>'+esc(d.source_field)+' \u2192 '+esc(d.target_field)+'</small>'+
+              '<small style="background:'+mc+';padding:0 4px;border-radius:3px;margin-top:2px">'+d.method+'</small>'+
+              '</span>';
+          }).join('')+'</div>';
+      }
+    }
+
+    mapHtml='<div class="sec">Auto-detected mapping</div><div class="map-grid">'+
+      '<div class="map-box"><h5>Join key</h5><span class="mtag">'+
+      esc(m.join_key_label||m.join_key)+'<small>'+esc(m.join_key)+'</small></span></div>'+
+      '<div class="map-box"><h5>Numeric fields (auto-tolerance)</h5>'+nums+'</div>'+
+      '<div class="map-box"><h5>Source-only (skipped)</h5>'+so+'</div>'+
+      '<div class="map-box"><h5>Target-only (skipped)</h5>'+to2+'</div>'+
+      crossMapped+'</div>';
+  }
+
+  // ── Field results table ────────────────────────────────────────────────────
+  var frows=r.field_results.map(function(fr,i){
+    var pct=fr.match_pct,fthr=fr.pass_threshold||thr;
+    var bc=pct>=fthr?'var(--pass)':pct>=(fthr*0.8)?'var(--warn)':'var(--fail)';
+    var stBadge=fr.status==='PASS'?'<span class="bdg b-pass">PASS</span>':'<span class="bdg b-fail">FAIL</span>';
+    var typeTag=fr.type==='numeric'
+      ?'<span class="tn">Numeric<br><small style="opacity:.7">&plusmn;'+fr.tolerance+'</small></span>'
+      :'<span class="ts">Text</span>';
+
+    // Main label line
+    var displayName=fr.display_name||fr.field_label||fr.field;
+    var isCross=fr.is_cross_mapped||false;
+
+    // Technical code line below the label
+    var techLine;
+    if(isCross){
+      techLine='<div class="ft">'+esc(fr.field)+
+        ' <span style="color:var(--accent);font-size:9px">&#8594;</span> '+
+        esc(fr.field_target)+'</div>';
+    }else{
+      techLine='<div class="ft">'+esc(fr.field)+'</div>';
+    }
+
+    // Target label shown alongside for cross-mapped fields
+    var tgtLblBadge='';
+    if(isCross&&fr.field_target_label&&fr.field_target_label!==fr.field_target){
+      tgtLblBadge=' <span style="font-size:9px;color:var(--muted);font-style:italic">&#8594; '+esc(fr.field_target_label)+'</span>';
+    }
+
+    // Mapping method badge
+    var methodBadge='';
+    if(fr.mapping_method&&fr.mapping_method!=='exact'){
+      var mc={'alias_object':'rgba(99,102,241,.2)','alias_global':'rgba(59,130,246,.2)','fuzzy':'rgba(245,158,11,.2)'};
+      var ml2={'alias_object':'alias','alias_global':'global alias','fuzzy':'fuzzy ('+Math.round((fr.mapping_confidence||0)*100)+'%)'};
+      var mcol=mc[fr.mapping_method]||'rgba(255,255,255,.07)';
+      var mlbl=ml2[fr.mapping_method]||fr.mapping_method;
+      methodBadge=' <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:'+mcol+';color:var(--muted)">'+mlbl+'</span>';
+    }
+
+    var hasMiss=fr.mismatches&&fr.mismatches.length>0;
+    var expIcon=hasMiss?'<span class="exp-icon" id="ei-'+i+'">&#9658;</span> ':'';
+    var totalMiss=fr.mismatch_count||(fr.mismatches?fr.mismatches.length:0);
+    var missRows=hasMiss?fr.mismatches.slice(0,20).map(function(m){
+      return '<tr><td>'+esc(String(m.material))+'</td>'+
+             '<td class="dold">'+esc(String(m.source_value))+'</td>'+
+             '<td class="dnew">'+esc(String(m.target_value))+'</td>'+
+             '<td style="color:var(--muted)">'+esc(m.issue)+'</td></tr>';
+    }).join(''):'';
+    var moreNote=totalMiss>20?'<div style="font-size:10px;color:var(--muted);padding:5px 8px">Showing 20 of '+totalMiss+' mismatches. Download Excel for full list.</div>':'';
+    var detRow=hasMiss?'<tr class="miss-row" id="md-'+i+'"><td colspan="8">'+
+      '<div class="miss-inner"><table>'+
+      '<thead><tr><th>Key</th><th>Source ('+esc(fr.field)+')</th>'+
+      '<th>Target ('+esc(fr.field_target)+')</th><th>Issue</th></tr></thead>'+
+      '<tbody>'+missRows+'</tbody></table>'+moreNote+'</div></td></tr>':'';
+    var thrPct='<span style="font-size:10px;color:var(--muted)">&ge;'+fthr+'%</span>';
+
+    return '<tr'+(hasMiss?' style="cursor:pointer" onclick="toggleRow('+i+')"':'')+'>'+
+      '<td>'+expIcon+'<span class="fl">'+esc(displayName)+'</span>'+tgtLblBadge+techLine+methodBadge+'</td>'+
+      '<td>'+typeTag+'</td>'+
+      '<td>'+fr.total+'</td>'+
+      '<td>'+fr.matched+'</td>'+
+      '<td>'+(fr.mismatched+fr.miss_source+fr.miss_target)+'</td>'+
+      '<td><div class="bar-w"><div class="bar-bg"><div class="bar-f" style="width:'+pct+'%;background:'+bc+'"></div></div>'+
+      '<span class="bar-v" style="color:'+bc+'">'+pct+'%</span></div></td>'+
+      '<td>'+thrPct+'</td>'+
+      '<td>'+stBadge+'</td></tr>'+detRow;
+  }).join('');
+
+  det.innerHTML=banner+businessMsg+
+    '<div class="det-hdr">'+
+    '<div><div class="det-title">'+r.name+'</div>'+
+    '<div class="det-meta">'+r.source_file+' &harr; '+r.target_file+
+    ' &nbsp;&middot;&nbsp; Validated: '+r.run_at+
+    (r.sap_object?' &nbsp;&middot;&nbsp; <span style="color:var(--muted)">'+r.sap_object+'</span>':'')+
+    '</div></div>'+
+    '<div class="det-right">'+dlBtn+'<span class="st-pill '+pc+'">'+r.status+'</span></div></div>'+
+    err+thrInfo+cards+mapHtml+
+    '<div class="sec">Field-level results</div>'+
+    '<div class="tbl-wrap"><table><thead><tr>'+
+    '<th>Field</th><th>Type</th><th>Total</th><th>Matched</th>'+
+    '<th>Issues</th><th>Match %</th><th>Threshold</th><th>Status</th>'+
+    '</tr></thead><tbody>'+frows+'</tbody></table></div>';
+}
+
+function toggleRow(i){
+  var row=document.getElementById('md-'+i),icon=document.getElementById('ei-'+i);
+  var open=row.style.display==='table-row';
+  row.style.display=open?'none':'table-row';
+  if(icon) icon.classList.toggle('open',!open);
+}
+
+// ── Upload modal ─────────────────────────────────────────────────────────────
+function openUploadModal(side){
+  uploadSide=side;uploadFileQueue=[];
+  document.getElementById('upload-modal-title').textContent='\u2B06 Upload '+(side==='source'?'Source':'Target')+' Files';
+  document.getElementById('upload-queue').style.display='none';
+  document.getElementById('upload-queue-rows').innerHTML='';
+  document.getElementById('upload-status').textContent='';
+  document.getElementById('upload-file-input').value='';
+  document.getElementById('upload-modal').classList.add('open');
+}
+
+function onUploadFilesChosen(input){
+  if(!input.files||!input.files.length) return;
+  uploadFileQueue=Array.from(input.files).map(function(f){return{file:f,saveName:f.name}});
+  renderUploadQueue();
+  document.getElementById('upload-queue').style.display='block';
+  document.getElementById('upload-status').textContent='';
+}
+
+function renderUploadQueue(){
+  document.getElementById('upload-queue-rows').innerHTML=uploadFileQueue.map(function(item,i){
+    var ext='.'+item.file.name.split('.').pop();
+    return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 12px;margin-bottom:7px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">'+
+      '<span style="font-size:12px;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">&#128196; '+esc(item.file.name)+'</span>'+
+      '<span style="font-size:10px;color:var(--muted)">'+fmt(Math.round(item.file.size/1024))+' KB</span></div>'+
+      '<div style="display:flex;align-items:center;gap:7px">'+
+      '<span style="font-size:11px;color:var(--muted);white-space:nowrap">Save as:</span>'+
+      '<input class="rename-input" id="rename-'+i+'" value="'+esc(item.saveName)+'" onchange="updateSaveName('+i+',this.value)"></div>'+
+      '<div style="font-size:10px;color:var(--muted);margin-top:4px">Rename to match the '+
+      (uploadSide==='source'?'target':'source')+' filename so they pair automatically.</div></div>';
+  }).join('');
+}
+
+function updateSaveName(i,v){if(uploadFileQueue[i]) uploadFileQueue[i].saveName=v.trim()||uploadFileQueue[i].file.name;}
+
+async function confirmUpload(){
+  var st=document.getElementById('upload-status');
+  st.style.color='var(--muted)';st.textContent='Uploading\u2026';
+  var saved=[],errors=[];
+  for(var i=0;i<uploadFileQueue.length;i++){
+    var item=uploadFileQueue[i];
+    var saveName=document.getElementById('rename-'+i)?document.getElementById('rename-'+i).value.trim():item.saveName;
+    if(!saveName) saveName=item.file.name;
+    var origExt='.'+item.file.name.split('.').pop().toLowerCase();
+    if(!saveName.toLowerCase().endsWith(origExt)) saveName+=origExt;
+    var fd=new FormData();
+    fd.append('file',item.file,saveName);
+    try{
+      var res=await fetch('/api/upload/'+uploadSide,{method:'POST',body:fd});
+      var data=await res.json();
+      if(data.ok) saved=saved.concat(data.saved);
+      else errors.push(data.error||'Error');
+    }catch(e){errors.push(String(e));}
+  }
+  if(errors.length){st.style.color='var(--fail)';st.textContent='Errors: '+errors.join(', ');}
+  else{
+    st.style.color='var(--pass)';st.textContent='Uploaded: '+saved.join(', ');
+    toast('Uploaded '+saved.length+' file(s) to '+uploadSide,'success');
+    setTimeout(function(){closeModal('upload-modal');refresh();},1000);
+  }
+  var stEl=document.getElementById(uploadSide==='source'?'src-st':'tgt-st');
+  if(stEl&&saved.length){stEl.style.color='var(--pass)';stEl.textContent='Uploaded: '+saved.join(', ');}
+}
+
+async function uploadLabels(input){
+  if(!input.files||!input.files.length) return;
+  var st=document.getElementById('lbl-st');st.textContent='Uploading\u2026';
+  var fd=new FormData();fd.append('file',input.files[0]);
+  var res=await fetch('/api/upload/labels',{method:'POST',body:fd});
+  var data=await res.json();
+  if(data.ok){st.style.color='var(--pass)';st.textContent='Labels applied \u2014 re-validating\u2026';toast('Custom labels applied','info');setTimeout(refresh,1000);}
+  else{st.style.color='var(--fail)';st.textContent=data.error;}
+  input.value='';
+}
+
+async function openLog(){
+  document.getElementById('log-modal').classList.add('open');
+  var activity=await fetch('/api/activity').then(function(r){return r.json()});
+  var el=document.getElementById('log-list');
+  if(!activity.length){el.innerHTML='<div class="empty-msg">No activity yet.</div>';return;}
+  var LI={info:'&#8505;',success:'&#10003;',warn:'&#9888;',error:'&#10060;'};
+  el.innerHTML=activity.map(function(e){
+    return '<div class="le '+e.level+'"><span class="le-ts">'+e.ts+'</span>'+
+           '<span class="le-m">'+(LI[e.level]||'')+' '+esc(e.message)+'</span></div>';
+  }).join('');
+}
+
+async function openReports(){
+  document.getElementById('rep-modal').classList.add('open');
+  var list=document.getElementById('rep-list');
+  list.innerHTML='<div class="empty-msg">Loading\u2026</div>';
+  var reports=await fetch('/api/reports').then(function(r){return r.json()});
+  if(!reports.length){list.innerHTML='<div class="empty-msg">No reports yet.</div>';return;}
+  list.innerHTML=reports.map(function(rep){
+    return '<div class="rep-row"><span class="rep-nm">&#128196; '+rep.filename+'</span>'+
+           '<span class="rep-mt">'+rep.size_kb+'KB &nbsp; '+rep.modified+'</span>'+
+           '<a class="rep-dl" href="/api/download-file/'+encodeURIComponent(rep.filename)+
+           '" download="'+rep.filename+'">&#8595; Download</a></div>';
+  }).join('');
+}
+
+async function openSettings(){
+  document.getElementById('set-modal').classList.add('open');
+  var cfg=await fetch('/api/config').then(function(r){return r.json()});
+  document.getElementById('cfg-src').value=cfg.source_dir||'';
+  document.getElementById('cfg-tgt').value=cfg.target_dir||'';
+  var thr=cfg.pass_threshold||100;
+  document.getElementById('thr-slider').value=thr;
+  document.getElementById('thr-display').textContent=thr+'%';
+  document.getElementById('lbl-current').textContent=
+    cfg.labels_file_exists?'Custom labels loaded: '+cfg.labels_file:'Using built-in SAP field dictionary.';
+  var avail=cfg.available_fields||[],sel=cfg.selected_fields||[];
+  if(avail.length){
+    var enriched=avail.map(function(f){
+      return {field:f.field,label:f.label,in_source:f.in_source!==false,
+              in_target:f.in_target!==false,common:f.common!==false,
+              selected:sel.length===0||sel.indexOf(f.field)>=0};
+    });
+    renderFieldCheckboxes(enriched,{common:enriched.filter(function(f){return f.common}).length,src_only:0,tgt_only:0});
+    var st=document.getElementById('field-st');
+    if(sel.length){st.style.color='#a5b4fc';st.textContent='Currently validating '+sel.length+' selected field(s).';}
+    else{st.style.color='var(--muted)';st.textContent='Currently validating all fields.';}
+  }else{
+    document.getElementById('field-checkboxes').innerHTML=
+      '<div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">Load fields from files above, or run a scan first.</div>';
+    document.getElementById('fs-filter-bar').innerHTML='';
+    document.getElementById('fs-count').textContent='0 selected';
+    document.getElementById('field-st').textContent='';
+  }
+}
+
+var previewedFiles={src:null,tgt:null};
+function previewFileSelected(side,input){
+  if(!input.files||!input.files.length) return;
+  previewedFiles[side]=input.files[0];
+  document.getElementById('prev-'+side).value=input.files[0].name;
+  input.value='';
+}
+
+async function loadFieldsFromFiles(){
+  var st=document.getElementById('prev-status');
+  var srcInput=document.getElementById('prev-src').value.trim();
+  var tgtInput=document.getElementById('prev-tgt').value.trim();
+  if(!srcInput&&!tgtInput){st.style.color='var(--fail)';st.textContent='Enter at least one file path or browse.';return;}
+  st.style.color='var(--muted)';st.textContent='Reading headers\u2026';
+  var srcPath=srcInput,tgtPath=tgtInput;
+  try{
+    if(previewedFiles.src){
+      var fd=new FormData();fd.append('file',previewedFiles.src);
+      var res=await fetch('/api/upload/source',{method:'POST',body:fd});
+      var data=await res.json();
+      if(data.ok){var cfg=await fetch('/api/config').then(function(r){return r.json()});srcPath=cfg.source_dir+'/'+previewedFiles.src.name;}
+    }
+    if(previewedFiles.tgt){
+      var fd2=new FormData();fd2.append('file',previewedFiles.tgt);
+      var res2=await fetch('/api/upload/target',{method:'POST',body:fd2});
+      var data2=await res2.json();
+      if(data2.ok){var cfg2=await fetch('/api/config').then(function(r){return r.json()});tgtPath=cfg2.target_dir+'/'+previewedFiles.tgt.name;}
+    }
+  }catch(e){}
+  try{
+    var res3=await fetch('/api/fields/preview',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source_path:srcPath,target_path:tgtPath})});
+    var d=await res3.json();
+    if(d.errors&&Object.keys(d.errors).length){st.style.color='var(--fail)';st.textContent=Object.values(d.errors).join(' | ');return;}
+    renderFieldCheckboxes(d.fields,d);
+    st.style.color='var(--pass)';
+    st.textContent=d.common+' common fields loaded'+(d.src_only?', '+d.src_only+' source-only':'')+(d.tgt_only?', '+d.tgt_only+' target-only':'')+'. Tick fields to validate.';
+  }catch(e){st.style.color='var(--fail)';st.textContent='Failed: '+e;}
+}
+
+function renderFieldCheckboxes(fields,summary){
+  var grid=document.getElementById('field-checkboxes');
+  var bar=document.getElementById('fs-filter-bar');
+  bar.innerHTML=
+    '<button class="fs-btn" style="border-radius:12px;padding:2px 10px;background:var(--accent);border-color:var(--accent);color:#fff" onclick="setFsFilter(this,\'all\')">All ('+fields.length+')</button>'+
+    (summary&&summary.common?'<button class="fs-btn" style="border-radius:12px;padding:2px 10px" onclick="setFsFilter(this,\'common\')">Common ('+summary.common+')</button>':'')+
+    (summary&&summary.src_only?'<button class="fs-btn" style="border-radius:12px;padding:2px 10px;color:var(--warn)" onclick="setFsFilter(this,\'src_only\')">Source only ('+summary.src_only+')</button>':'')+
+    (summary&&summary.tgt_only?'<button class="fs-btn" style="border-radius:12px;padding:2px 10px;color:var(--info)" onclick="setFsFilter(this,\'tgt_only\')">Target only ('+summary.tgt_only+')</button>':'');
+  if(!fields||!fields.length){grid.innerHTML='<div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">No fields found.</div>';return;}
+  grid.innerHTML=fields.map(function(f){
+    var lbl=f.label&&f.label!==f.field?f.label:f.field;
+    var tech=f.label&&f.label!==f.field?'<div class="fc-tech">'+f.field+'</div>':'';
+    var canSelect=f.common!==false;
+    var disabled=canSelect?'':' disabled';
+    var opacity=canSelect?'':'opacity:.45;';
+    var title=canSelect?'':(f.in_source?'Source only':'Target only');
+    var sc=f.in_source?'<span style="font-size:9px;background:rgba(34,197,94,.15);color:var(--pass);padding:1px 5px;border-radius:3px;margin-left:3px">S</span>':'';
+    var tc=f.in_target?'<span style="font-size:9px;background:rgba(59,130,246,.15);color:var(--info);padding:1px 5px;border-radius:3px;margin-left:2px">T</span>':'';
+    var role=f.common?'common':(f.in_source?'src_only':'tgt_only');
+    return '<label class="fc-item" style="'+opacity+'" title="'+title+'" data-field="'+f.field.toLowerCase()+'" data-label="'+lbl.toLowerCase()+'" data-role="'+role+'">'+
+      '<input type="checkbox" value="'+f.field+'"'+(f.selected?' checked':'')+disabled+' onchange="updateFsCount()">'+
+      '<span><div class="fc-label">'+lbl+sc+tc+'</div>'+tech+'</span></label>';
+  }).join('');
+  updateFsCount();
+}
+
+var currentFsFilter='all';
+function setFsFilter(btn,filter){
+  document.querySelectorAll('#fs-filter-bar .fs-btn').forEach(function(b){b.style.background='transparent';b.style.borderColor='var(--border)';b.style.color='var(--muted)';});
+  btn.style.background='var(--accent)';btn.style.borderColor='var(--accent)';btn.style.color='#fff';
+  currentFsFilter=filter;filterFieldCheckboxes();
+}
+function filterFieldCheckboxes(){
+  var q=(document.getElementById('fs-search')||{value:''}).value.toLowerCase();
+  document.querySelectorAll('#field-checkboxes .fc-item').forEach(function(item){
+    var field=item.dataset.field||'',label=item.dataset.label||'',role=item.dataset.role||'';
+    var mf=currentFsFilter==='all'||(currentFsFilter==='common'&&role==='common')||(currentFsFilter==='src_only'&&role==='src_only')||(currentFsFilter==='tgt_only'&&role==='tgt_only');
+    var ms=!q||field.includes(q)||label.includes(q);
+    item.style.display=(mf&&ms)?'':'none';
+  });
+}
+function selectAllVisible(){document.querySelectorAll('#field-checkboxes .fc-item:not([style*="display: none"]) input:not(:disabled)').forEach(function(cb){cb.checked=true});updateFsCount();}
+function clearAllVisible(){document.querySelectorAll('#field-checkboxes .fc-item:not([style*="display: none"]) input:not(:disabled)').forEach(function(cb){cb.checked=false});updateFsCount();}
+function updateThrDisplay(){document.getElementById('thr-display').textContent=document.getElementById('thr-slider').value+'%';}
+function updateFsCount(){
+  var en=document.querySelectorAll('#field-checkboxes input:not(:disabled)');
+  var ch=document.querySelectorAll('#field-checkboxes input:not(:disabled):checked');
+  document.getElementById('fs-count').textContent=(ch.length===en.length&&en.length>0)?'All fields ('+en.length+')':ch.length+' of '+en.length+' selected';
+}
+function selectAllFields(){document.querySelectorAll('#field-checkboxes input:not(:disabled)').forEach(function(cb){cb.checked=true});updateFsCount();}
+function clearAllFields(){document.querySelectorAll('#field-checkboxes input:not(:disabled)').forEach(function(cb){cb.checked=false});updateFsCount();}
+async function savePaths(){
+  var st=document.getElementById('path-st');st.textContent='Saving\u2026';
+  var res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({source_dir:document.getElementById('cfg-src').value,target_dir:document.getElementById('cfg-tgt').value})});
+  var data=await res.json();
+  if(data.ok){st.style.color='var(--pass)';st.textContent='Saved \u2014 rescanning\u2026';setTimeout(refresh,800);}
+  else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+}
+async function saveThreshold(){
+  var thr=parseFloat(document.getElementById('thr-slider').value);
+  var st=document.getElementById('thr-st');st.textContent='Applying\u2026';
+  var res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass_threshold:thr})});
+  var data=await res.json();
+  if(data.ok){st.style.color='var(--pass)';st.textContent='Threshold set to '+thr+'% \u2014 re-validating\u2026';toast('Pass threshold set to '+thr+'%','info');setTimeout(refresh,800);}
+  else{st.style.color='var(--fail)';st.textContent='Failed';}
+}
+async function saveFieldSelection(){
+  var allEnabled=document.querySelectorAll('#field-checkboxes input:not(:disabled)');
+  var allChecked=document.querySelectorAll('#field-checkboxes input:not(:disabled):checked');
+  if(allEnabled.length===0){var st=document.getElementById('field-st');st.style.color='var(--warn)';st.textContent='No fields loaded. Load fields from files or run a scan first.';return;}
+  var selected=[];allChecked.forEach(function(cb){selected.push(cb.value);});
+  var toSave=(selected.length===allEnabled.length)?[]:selected;
+  var st=document.getElementById('field-st');st.style.color='var(--muted)';st.textContent='Saving\u2026';
+  try{
+    var res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selected_fields:toSave})});
+    var data=await res.json();
+    if(data.ok){
+      st.style.color='var(--pass)';
+      var label=toSave.length?toSave.length+' field(s) selected':'All fields selected';
+      st.textContent=label+' \u2014 re-validating\u2026';toast(label+' applied','success');
+      var thr=document.getElementById('thr-slider').value;
+      document.getElementById('thr-badge').textContent='Threshold: '+thr+'%'+(toSave.length?' | Fields: '+toSave.length:'');
+      setTimeout(refresh,1200);
+    }else{st.style.color='var(--fail)';st.textContent=data.error||'Save failed';}
+  }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
+}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+['log-modal','rep-modal','set-modal','upload-modal'].forEach(function(id){
+  document.getElementById(id).addEventListener('click',function(e){if(e.target===this) this.classList.remove('open');});
+});
+function card(val,lbl,cls){return '<div class="card '+cls+'"><div class="n">'+val+'</div><div class="l">'+lbl+'</div></div>';}
+function fmt(n){return Number(n).toLocaleString();}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+init();
+</script>
+</body>
+</html>
