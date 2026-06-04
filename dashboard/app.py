@@ -5,9 +5,11 @@ Open: http://localhost:5000
 """
 
 import sys
+import csv as csv_mod
 import threading
 import time
 import json
+import io
 from pathlib import Path
 from datetime import datetime
 
@@ -16,8 +18,8 @@ from werkzeug.utils import secure_filename
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.validator   import MaterialValidator
-from core.reporter    import generate_excel_report
+from core.validator    import MaterialValidator
+from core.reporter     import generate_excel_report
 from core.field_labels import (
     get_label, load_custom_labels, enrich_field_rows,
     get_display, SAP_FIELD_LABELS
@@ -27,12 +29,14 @@ from core.object_config import get_object_config, SAP_OBJECT_CONFIG
 
 app = Flask(__name__)
 
-BASE_DIR    = Path(__file__).parent.parent
-REPORTS_DIR = BASE_DIR / "reports"
-CONFIG_FILE = BASE_DIR / "config.json"
-LABELS_FILE = BASE_DIR / "custom_labels.csv"
+BASE_DIR      = Path(__file__).parent.parent
+REPORTS_DIR   = BASE_DIR / "reports"
+CONFIG_FILE   = BASE_DIR / "config.json"
+LABELS_FILE   = BASE_DIR / "custom_labels.csv"
+TEMPLATES_DIR = BASE_DIR / "templates"
 
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_CONFIG = {
     "source_dir":      str(BASE_DIR / "data" / "source"),
@@ -40,6 +44,7 @@ DEFAULT_CONFIG = {
     "pass_threshold":  100.0,
     "selected_fields": [],
     "manual_pairs":    [],
+    "active_template": "",
 }
 
 results_store = {}
@@ -51,10 +56,11 @@ file_states  = {}
 activity_log = []
 
 SUPPORTED_EXT = {".csv", ".xlsx", ".xls"}
+TEMPLATE_EXT  = {".csv", ".xlsx", ".xls", ".txt"}
 scan_lock     = threading.Lock()
 
 
-# ── Config helpers ────────────────────────────────────────────────────────────
+# ── Config helpers ──────────────────────────────────────────────────────────────
 
 def load_config():
     if CONFIG_FILE.exists():
@@ -81,15 +87,15 @@ def get_dirs():
 def log_event(message, level="info"):
     entry = {"ts": datetime.now().strftime("%H:%M:%S"), "message": message, "level": level}
     activity_log.append(entry)
-    if len(activity_log) > 50:
+    if len(activity_log) > 200:
         activity_log.pop(0)
-    print(f"  [{entry['ts']}] {message}")
+    print(f"  [{entry['ts']}] [{level.upper()}] {message}")
 
 
-def cleanup_old_reports(keep_latest=20):
+def cleanup_old_reports(keep=20):
     files = sorted(REPORTS_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
-    for f in files[keep_latest:]:
-        try:   f.unlink()
+    for f in files[keep:]:
+        try: f.unlink()
         except: pass
 
 
@@ -98,9 +104,7 @@ def _get_custom_labels():
 
 
 def _read_file_headers(src_path: str, tgt_path: str = None):
-    """Read only the header row from CSV/XLSX — very fast."""
-    import csv as csv_mod
-
+    """Read only the header row — very fast, no full file load."""
     def headers(path):
         p = Path(path)
         if not p.exists():
@@ -122,12 +126,99 @@ def _read_file_headers(src_path: str, tgt_path: str = None):
     return src_cols, tgt_cols
 
 
-# ── File discovery & pairing ──────────────────────────────────────────────────
+# ── Field-selection template helpers ───────────────────────────────────────────
+
+def _read_template_fields(path: Path) -> list:
+    """
+    Parse a field-selection template file.
+    Supported formats:
+      CSV  : first column = field names (header row auto-skipped)
+      XLSX : column A = field names (header row auto-skipped)
+      TXT  : one field name per line (lines starting with # are comments)
+    Returns: list of UPPERCASE field names, no blanks, no comments.
+    """
+    fields = []
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".txt":
+            for line in path.read_text(encoding="utf-8-sig").splitlines():
+                val = line.strip()
+                if val and not val.startswith("#"):
+                    fields.append(val.upper())
+
+        elif suffix in (".xlsx", ".xls"):
+            import openpyxl
+            wb        = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+            ws        = wb.active
+            first_row = True
+            for row in ws.iter_rows(values_only=True):
+                val = str(row[0] or "").strip()
+                if not val:
+                    continue
+                if val.startswith("#"):
+                    continue
+                val_up = val.upper()
+                if first_row:
+                    first_row = False
+                    if val_up in ("FIELD", "FIELD_NAME", "FIELDS", "SAP_FIELD",
+                                  "FIELDNAME", "SAP FIELD", "FIELD NAME"):
+                        continue
+                fields.append(val_up)
+            wb.close()
+
+        else:  # CSV
+            with open(str(path), encoding="utf-8-sig") as f:
+                reader    = csv_mod.reader(f)
+                first_row = True
+                for row in reader:
+                    if not row:
+                        continue
+                    val = row[0].strip()
+                    if not val:
+                        continue
+                    # Skip comment lines
+                    if val.startswith("#"):
+                        continue
+                    val_up = val.upper()
+                    # Skip header row
+                    if first_row:
+                        first_row = False
+                        if val_up in ("FIELD", "FIELD_NAME", "FIELDS", "SAP_FIELD",
+                                      "FIELDNAME", "SAP FIELD", "FIELD NAME"):
+                            continue
+                    fields.append(val_up)
+
+    except Exception as e:
+        print(f"Template parse error ({path.name}): {e}")
+    return fields
+
+
+def _list_templates() -> list:
+    cfg    = load_config()
+    active = cfg.get("active_template", "")
+    result = []
+    for p in sorted(TEMPLATES_DIR.iterdir()):
+        if p.suffix.lower() in TEMPLATE_EXT and p.is_file():
+            fields = _read_template_fields(p)
+            result.append({
+                "filename":    p.name,
+                "field_count": len(fields),
+                "fields":      fields,
+                "is_active":   p.name == active,
+                "modified":    datetime.fromtimestamp(
+                    p.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
+            })
+    return result
+
+
+# ── File discovery & pairing ────────────────────────────────────────────────────
 
 def get_available_files():
     src_dir, tgt_dir = get_dirs()
-    src = sorted([f for f in src_dir.iterdir() if f.suffix.lower() in SUPPORTED_EXT], key=lambda f: f.name.upper())
-    tgt = sorted([f for f in tgt_dir.iterdir() if f.suffix.lower() in SUPPORTED_EXT], key=lambda f: f.name.upper())
+    src = sorted([f for f in src_dir.iterdir() if f.suffix.lower() in SUPPORTED_EXT],
+                 key=lambda f: f.name.upper())
+    tgt = sorted([f for f in tgt_dir.iterdir() if f.suffix.lower() in SUPPORTED_EXT],
+                 key=lambda f: f.name.upper())
     return src, tgt
 
 
@@ -136,8 +227,10 @@ def discover_pairs():
     cfg          = load_config()
     manual_pairs = cfg.get("manual_pairs", [])
 
-    src_files = {f.name: f for f in SOURCE_DIR.iterdir() if f.suffix.lower() in SUPPORTED_EXT}
-    tgt_files = {f.name: f for f in TARGET_DIR.iterdir() if f.suffix.lower() in SUPPORTED_EXT}
+    src_files = {f.name: f for f in SOURCE_DIR.iterdir()
+                 if f.suffix.lower() in SUPPORTED_EXT}
+    tgt_files = {f.name: f for f in TARGET_DIR.iterdir()
+                 if f.suffix.lower() in SUPPORTED_EXT}
 
     pairs    = []
     used_src = set()
@@ -148,24 +241,27 @@ def discover_pairs():
         src_name = mp.get("source_file", "")
         tgt_name = mp.get("target_file", "")
         name     = mp.get("name", "").upper().strip() or Path(src_name).stem.upper()
-        sp = str(src_files[src_name]) if src_name in src_files else None
-        tp = str(tgt_files[tgt_name]) if tgt_name in tgt_files else None
-        has_pair = sp and tp
+        sp       = str(src_files[src_name]) if src_name in src_files else None
+        tp       = str(tgt_files[tgt_name]) if tgt_name in tgt_files else None
+        has_pair = bool(sp and tp)
         mtime    = max(Path(sp).stat().st_mtime, Path(tp).stat().st_mtime) if has_pair else None
         pairs.append({
             "name": name, "source_path": sp, "target_path": tp,
-            "has_pair": bool(has_pair), "mtime": mtime,
+            "has_pair": has_pair, "mtime": mtime,
             "source_file": Path(sp).name if sp else src_name,
             "target_file": Path(tp).name if tp else tgt_name,
             "match_type": "manual",
-            "missing": [] if has_pair else (["source"] if not sp else []) + (["target"] if not tp else []),
+            "missing": [] if has_pair else
+                       (["source"] if not sp else []) + (["target"] if not tp else []),
         })
         if sp: used_src.add(src_name)
         if tp: used_tgt.add(tgt_name)
 
-    # Auto pairs: exact filename stem
-    src_by_stem = {Path(f).stem.upper(): (f, fpath) for f, fpath in src_files.items() if f not in used_src}
-    tgt_by_stem = {Path(f).stem.upper(): (f, fpath) for f, fpath in tgt_files.items() if f not in used_tgt}
+    # Auto-pair by exact filename stem
+    src_by_stem = {Path(f).stem.upper(): (f, fp)
+                   for f, fp in src_files.items() if f not in used_src}
+    tgt_by_stem = {Path(f).stem.upper(): (f, fp)
+                   for f, fp in tgt_files.items() if f not in used_tgt}
 
     for stem in sorted(set(src_by_stem) & set(tgt_by_stem)):
         sf, sp = src_by_stem[stem]
@@ -183,50 +279,85 @@ def discover_pairs():
     # Unmatched
     for f, fp in src_files.items():
         if f not in used_src:
-            pairs.append({"name": Path(f).stem.upper(), "source_path": str(fp), "target_path": None,
-                          "has_pair": False, "mtime": None, "source_file": f, "target_file": None,
+            pairs.append({"name": Path(f).stem.upper(), "source_path": str(fp),
+                          "target_path": None, "has_pair": False, "mtime": None,
+                          "source_file": f, "target_file": None,
                           "match_type": "unmatched", "missing": ["target"]})
     for f, fp in tgt_files.items():
         if f not in used_tgt:
-            pairs.append({"name": Path(f).stem.upper(), "source_path": None, "target_path": str(fp),
-                          "has_pair": False, "mtime": None, "source_file": None, "target_file": f,
+            pairs.append({"name": Path(f).stem.upper(), "source_path": None,
+                          "target_path": str(fp), "has_pair": False, "mtime": None,
+                          "source_file": None, "target_file": f,
                           "match_type": "unmatched", "missing": ["source"]})
     return pairs
 
 
-# ── Business status ───────────────────────────────────────────────────────────
+# ── Business status ─────────────────────────────────────────────────────────────
 
 def calculate_business_status(result, pass_threshold):
-    ss         = result.summary_stats
-    pass_rate  = float(ss.get("pass_rate_pct", 0))
-    only_src   = int(result.records_only_in_source or 0)
-    only_tgt   = int(result.records_only_in_target or 0)
+    ss        = result.summary_stats
+    pass_rate = float(ss.get("pass_rate_pct", 0))
+    only_src  = int(result.records_only_in_source or 0)
+    only_tgt  = int(result.records_only_in_target or 0)
 
     if pass_rate < pass_threshold:
         return {"status": "FAIL", "field_status": "FAIL", "record_status": "CHECKED",
-                "message": f"Field validation failed. Pass rate is {pass_rate:.2f}% which is below threshold {pass_threshold:.2f}%."}
+                "message": (f"Field validation failed. Pass rate is {pass_rate:.2f}% "
+                            f"which is below threshold {pass_threshold:.2f}%.")}
 
     if only_src > 0 or only_tgt > 0:
         if only_src > 0 and only_tgt > 0:
-            msg = f"{only_src:,} records exist only in source and {only_tgt:,} records exist only in target."
+            msg = (f"{only_src:,} records only in source and "
+                   f"{only_tgt:,} records only in target.")
         elif only_tgt > 0:
-            msg = f"Target has {only_tgt:,} extra records not found in source."
+            msg = f"Target has {only_tgt:,} extra records not in source."
         else:
             msg = f"Source has {only_src:,} records not found in target."
         return {"status": "WARNING", "field_status": "PASS", "record_status": "WARNING",
-                "message": f"Field validation passed with {pass_rate:.2f}% against threshold {pass_threshold:.2f}%, but {msg}"}
+                "message": (f"Field validation passed ({pass_rate:.2f}% >= "
+                            f"{pass_threshold:.2f}%), but {msg}")}
 
     return {"status": "PASS", "field_status": "PASS", "record_status": "PASS",
-            "message": f"Validation passed. Field pass rate is {pass_rate:.2f}% and records are fully reconciled."}
+            "message": (f"Validation passed. Field pass rate {pass_rate:.2f}% "
+                        f"and records fully reconciled.")}
 
 
-# ── Core validation runner ────────────────────────────────────────────────────
+# ── Core validation runner ──────────────────────────────────────────────────────
 
 def run_validation(name, source_path, target_path):
-    cfg             = load_config()
-    pass_threshold  = float(cfg.get("pass_threshold", 100.0))
-    selected_fields = cfg.get("selected_fields", [])
-    custom          = _get_custom_labels()
+    cfg            = load_config()
+    pass_threshold = float(cfg.get("pass_threshold", 100.0))
+    custom         = _get_custom_labels()
+
+    # ── Determine field filter: template > manual > all ───────────────────────
+    selected_fields    = cfg.get("selected_fields", [])
+    active_template    = cfg.get("active_template", "")
+    template_name_used = ""
+
+    if active_template:
+        tmpl_path = TEMPLATES_DIR / active_template
+        if tmpl_path.exists():
+            tmpl_fields = _read_template_fields(tmpl_path)
+            if tmpl_fields:
+                selected_fields    = tmpl_fields
+                template_name_used = active_template
+                log_event(
+                    f"{name}: using template '{active_template}' "
+                    f"({len(tmpl_fields)} fields)",
+                    "info",
+                )
+            else:
+                log_event(
+                    f"{name}: template '{active_template}' is empty — "
+                    f"validating all fields",
+                    "warn",
+                )
+        else:
+            log_event(
+                f"{name}: template '{active_template}' not found — "
+                f"validating all fields",
+                "warn",
+            )
 
     obj_cfg  = get_object_config(name)
     join_key = obj_cfg.get("join_key", None)
@@ -234,40 +365,65 @@ def run_validation(name, source_path, target_path):
     src_mb = Path(source_path).stat().st_size / (1024 * 1024)
     tgt_mb = Path(target_path).stat().st_size / (1024 * 1024)
     if src_mb > 50 or tgt_mb > 50:
-        log_event(f"{name}: large files ({src_mb:.1f} MB / {tgt_mb:.1f} MB) — may take a few minutes", "warn")
+        log_event(
+            f"{name}: large files ({src_mb:.1f} MB / {tgt_mb:.1f} MB) — "
+            f"may take a few minutes",
+            "warn",
+        )
 
-    # Read actual column headers
     try:
         src_cols, tgt_cols = _read_file_headers(source_path, target_path)
     except Exception as e:
         log_event(f"{name}: could not read headers — {e}", "warn")
         src_cols, tgt_cols = [], []
 
-    jk_upper       = join_key.upper() if join_key else ""
-    src_no_jk      = [c for c in src_cols if c != jk_upper]
-    tgt_no_jk      = [c for c in tgt_cols if c != jk_upper]
+    jk_upper  = join_key.upper() if join_key else ""
+    src_no_jk = [c for c in src_cols if c != jk_upper]
+    tgt_no_jk = [c for c in tgt_cols if c != jk_upper]
 
-    # Build field mapping: exact + alias + fuzzy
+    # ── Build field mapping (alias + fuzzy, with template filter) ─────────────
     mapping_result = build_field_mapping(
         source_cols=src_no_jk,
         target_cols=tgt_no_jk,
         object_type=name,
-        selected_fields=selected_fields,
+        selected_fields=selected_fields,   # None = all fields
         custom_labels=custom,
     )
 
-    field_map = mapping_result.mapped_fields
-
+    field_map    = mapping_result.mapped_fields
     exact_count  = sum(1 for d in mapping_result.mapped_details if d.method == "exact")
     alias_count  = sum(1 for d in mapping_result.mapped_details if "alias" in d.method)
     fuzzy_count  = sum(1 for d in mapping_result.mapped_details if d.method == "fuzzy")
+
     log_event(
         f"{name}: mapped {len(field_map)} fields "
-        f"({exact_count} exact, {alias_count} alias, {fuzzy_count} fuzzy) "
-        f"| {len(mapping_result.unmapped_source)} unmapped source "
-        f"| {len(mapping_result.unmapped_target)} unmapped target",
+        f"({exact_count} exact, {alias_count} alias, {fuzzy_count} fuzzy)"
+        + (f" via template '{template_name_used}'" if template_name_used else ""),
         "info",
     )
+
+    # Warn if template produced zero mapped fields
+    if selected_fields and template_name_used and not field_map:
+        log_event(
+            f"{name}: WARNING — template '{template_name_used}' has "
+            f"{len(selected_fields)} fields but NONE matched any source column. "
+            f"Source columns: {src_no_jk[:8]}... "
+            f"Template fields: {selected_fields[:8]}...",
+            "error",
+        )
+    elif selected_fields and template_name_used:
+        # Log which template fields weren't found
+        mapped_set = set(field_map.keys())
+        src_set    = set(src_no_jk)
+        missing    = [f for f in selected_fields
+                      if f not in src_set and f not in mapped_set]
+        if missing:
+            log_event(
+                f"{name}: {len(missing)} template field(s) not matched: "
+                f"{', '.join(missing[:8])}"
+                + (" …" if len(missing) > 8 else ""),
+                "warn",
+            )
 
     validator = MaterialValidator(
         field_map=field_map,
@@ -280,11 +436,12 @@ def run_validation(name, source_path, target_path):
     ss              = result.summary_stats
     business_status = calculate_business_status(result, pass_threshold)
 
-    # Build field rows with labels and mapping metadata
+    # ── Build field rows ───────────────────────────────────────────────────────
     field_rows = []
     for fr in result.field_results:
         detail = next(
-            (d for d in mapping_result.mapped_details if d.source_field == fr.field_source), None
+            (d for d in mapping_result.mapped_details
+             if d.source_field == fr.field_source), None
         )
         disp = get_display(fr.field_source, fr.field_target, custom)
         field_rows.append({
@@ -311,29 +468,32 @@ def run_validation(name, source_path, target_path):
             "mismatch_count":     len(fr.mismatch_details),
         })
 
-    # Mapping info for dashboard display
+    # ── Mapping info for dashboard ─────────────────────────────────────────────
     mapping_info = None
     if result.mapping:
         mapping_info = {
             "join_key":           result.mapping.join_key,
             "join_key_label":     get_label(result.mapping.join_key, custom),
             "matched_fields":     result.mapping.matched_fields,
-            "matched_labels":     {f: get_label(f, custom) for f in result.mapping.matched_fields},
+            "matched_labels":     {f: get_label(f, custom)
+                                   for f in result.mapping.matched_fields},
             "source_only_fields": mapping_result.unmapped_source,
-            "source_only_labels": {f: get_label(f, custom) for f in mapping_result.unmapped_source},
+            "source_only_labels": {f: get_label(f, custom)
+                                   for f in mapping_result.unmapped_source},
             "target_only_fields": mapping_result.unmapped_target,
-            "target_only_labels": {f: get_label(f, custom) for f in mapping_result.unmapped_target},
+            "target_only_labels": {f: get_label(f, custom)
+                                   for f in mapping_result.unmapped_target},
             "numeric_fields":     result.mapping.numeric_fields,
             "tolerance_map":      result.mapping.tolerance_map,
             "selected_fields":    selected_fields,
             "pass_threshold":     pass_threshold,
         }
 
-    # available_fields for Settings field selector — ALL columns with labels
+    # ── available_fields for Settings field selector ───────────────────────────
     sel_set = set(selected_fields) if selected_fields else set()
     available_fields = []
     for col in src_cols:
-        tgt_col  = field_map.get(col)
+        tgt_col = field_map.get(col)
         available_fields.append({
             "field":        col,
             "label":        get_label(col, custom),
@@ -347,10 +507,14 @@ def run_validation(name, source_path, target_path):
     for col in tgt_cols:
         if col not in field_map.values() and col != jk_upper:
             available_fields.append({
-                "field": col, "label": get_label(col, custom),
-                "in_source": False, "in_target": True,
-                "target_col": col, "target_label": get_label(col, custom),
-                "common": False, "selected": False,
+                "field":        col,
+                "label":        get_label(col, custom),
+                "in_source":    False,
+                "in_target":    True,
+                "target_col":   col,
+                "target_label": get_label(col, custom),
+                "common":       False,
+                "selected":     False,
             })
 
     ts             = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -378,6 +542,7 @@ def run_validation(name, source_path, target_path):
         "pass_rate_pct":          ss["pass_rate_pct"],
         "pass_threshold":         pass_threshold,
         "selected_fields":        selected_fields,
+        "template_used":          template_name_used,
         "errors":                 result.errors,
         "mapping":                mapping_info,
         "field_mapping_detail":   mapping_result_to_dict(mapping_result),
@@ -397,16 +562,17 @@ def run_validation(name, source_path, target_path):
     return result_dict
 
 
-# ── Scan orchestrator ─────────────────────────────────────────────────────────
+# ── Scan orchestrator ───────────────────────────────────────────────────────────
 
 def scan_and_validate_all():
     if not scan_lock.acquire(blocking=False):
         log_event("Scan already running — skipping", "warn")
         return
 
-    scan_status.update({"scanning": True, "error": None, "current_file": None,
-                        "total_files": 0, "completed_files": 0})
-
+    scan_status.update({
+        "scanning": True, "error": None,
+        "current_file": None, "total_files": 0, "completed_files": 0,
+    })
     try:
         pairs       = discover_pairs()
         valid_pairs = [p for p in pairs if p["has_pair"]]
@@ -416,14 +582,20 @@ def scan_and_validate_all():
             name = pair["name"]
 
             if not pair["has_pair"]:
-                prev = file_states.get(name, {})
-                if prev.get("state") != "unmatched":
+                if file_states.get(name, {}).get("state") != "unmatched":
                     side  = "source" if pair["source_path"] else "target"
                     other = "target" if side == "source" else "source"
-                    log_event(f"{name}: found in {side} only — waiting for {other}", "warn")
-                    file_states[name] = {"state": "unmatched",
+                    log_event(
+                        f"{name}: found in {side} only — "
+                        f"waiting for {other} to pair",
+                        "warn",
+                    )
+                    file_states[name] = {
+                        "state": "unmatched",
                         "detected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "source_file": pair["source_file"], "target_file": pair["target_file"]}
+                        "source_file": pair["source_file"],
+                        "target_file": pair["target_file"],
+                    }
                 continue
 
             last_mtime = pair["mtime"]
@@ -431,8 +603,11 @@ def scan_and_validate_all():
             prev_state = file_states.get(name, {})
 
             if not existing:
-                mt = pair.get("match_type", "auto")
-                log_event(f"{name}: new pair [{mt}] — {pair['source_file']} + {pair['target_file']}", "info")
+                log_event(
+                    f"{name}: new pair [{pair.get('match_type','auto')}] — "
+                    f"{pair['source_file']} ↔ {pair['target_file']}",
+                    "info",
+                )
             elif prev_state.get("_mtime") != last_mtime:
                 log_event(f"{name}: file changed — re-validating", "info")
             else:
@@ -440,33 +615,49 @@ def scan_and_validate_all():
                 continue
 
             scan_status["current_file"] = name
-            file_states[name] = {"state": "validating",
+            file_states[name] = {
+                "state": "validating",
                 "detected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "source_file": pair["source_file"], "target_file": pair["target_file"],
-                "_mtime": last_mtime}
+                "source_file": pair["source_file"],
+                "target_file": pair["target_file"],
+                "_mtime": last_mtime,
+            }
 
             try:
-                result = run_validation(name, pair["source_path"], pair["target_path"])
+                result = run_validation(
+                    name, pair["source_path"], pair["target_path"]
+                )
                 result["_mtime"] = last_mtime
                 results_store[name] = result
-                file_states[name] = {"state": "done",
-                    "detected_at": file_states[name]["detected_at"],
-                    "validated_at": result["run_at"],
-                    "source_file": pair["source_file"], "target_file": pair["target_file"],
-                    "_mtime": last_mtime, "status": result["status"],
-                    "field_status": result["field_status"],
+
+                file_states[name] = {
+                    "state":         "done",
+                    "detected_at":   file_states[name]["detected_at"],
+                    "validated_at":  result["run_at"],
+                    "source_file":   pair["source_file"],
+                    "target_file":   pair["target_file"],
+                    "_mtime":        last_mtime,
+                    "status":        result["status"],
+                    "field_status":  result["field_status"],
                     "record_status": result["record_status"],
-                    "message": result["business_message"]}
-                level = "success" if result["status"] == "PASS" else "warn" if result["status"] == "WARNING" else "error"
-                log_event(f"{name}: {result['status']} — {result['business_message']} "
-                          f"| Matched: {result['records_matched']:,} "
-                          f"| Src only: {result['records_only_in_source']:,} "
-                          f"| Tgt only: {result['records_only_in_target']:,}", level)
+                    "message":       result["business_message"],
+                }
+
+                level = ("success" if result["status"] == "PASS"
+                         else "warn" if result["status"] == "WARNING"
+                         else "error")
+                log_event(
+                    f"{name}: {result['status']} — {result['business_message']} | "
+                    f"Matched: {result['records_matched']:,} | "
+                    f"Src only: {result['records_only_in_source']:,} | "
+                    f"Tgt only: {result['records_only_in_target']:,}",
+                    level,
+                )
             except Exception as e:
                 file_states[name]["state"] = "error"
                 file_states[name]["error"] = str(e)
                 scan_status["error"]       = str(e)
-                log_event(f"{name}: error — {e}", "error")
+                log_event(f"{name}: ERROR — {e}", "error")
             finally:
                 scan_status["completed_files"] += 1
 
@@ -487,7 +678,7 @@ def background_watcher(interval=60):
         time.sleep(interval)
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ── Routes ──────────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
@@ -502,20 +693,32 @@ def api_scan():
 
 @app.route("/api/status")
 def api_status():
-    pairs  = discover_pairs()
-    cfg    = load_config()
-    s, t   = get_dirs()
+    pairs = discover_pairs()
+    cfg   = load_config()
+    s, t  = get_dirs()
+    sel   = cfg.get("selected_fields", [])
+    tmpl  = cfg.get("active_template", "")
     return jsonify({
-        "last_scan": scan_status["last_scan"], "scanning": scan_status["scanning"],
-        "error": scan_status["error"], "current_file": scan_status["current_file"],
-        "total_files": scan_status["total_files"], "completed_files": scan_status["completed_files"],
-        "source_dir": str(s), "target_dir": str(t),
-        "pairs": pairs, "file_states": file_states,
-        "total_tables": len([p for p in pairs if p["has_pair"]]),
-        "unmatched": len([p for p in pairs if not p["has_pair"]]),
-        "pass_threshold": cfg.get("pass_threshold", 100.0),
-        "selected_fields": cfg.get("selected_fields", []),
-        "validation_mode": "all_fields" if not cfg.get("selected_fields") else "selected_fields",
+        "last_scan":       scan_status["last_scan"],
+        "scanning":        scan_status["scanning"],
+        "error":           scan_status["error"],
+        "current_file":    scan_status["current_file"],
+        "total_files":     scan_status["total_files"],
+        "completed_files": scan_status["completed_files"],
+        "source_dir":      str(s),
+        "target_dir":      str(t),
+        "pairs":           pairs,
+        "file_states":     file_states,
+        "total_tables":    len([p for p in pairs if p["has_pair"]]),
+        "unmatched":       len([p for p in pairs if not p["has_pair"]]),
+        "pass_threshold":  cfg.get("pass_threshold", 100.0),
+        "selected_fields": sel,
+        "active_template": tmpl,
+        "validation_mode": (
+            f"template:{tmpl}" if tmpl else
+            "selected_fields"  if sel  else
+            "all_fields"
+        ),
     })
 
 
@@ -535,6 +738,8 @@ def api_activity():
     return jsonify(list(reversed(activity_log)))
 
 
+# ── Upload ──────────────────────────────────────────────────────────────────────
+
 @app.route("/api/upload/source", methods=["POST"])
 def upload_source():
     return _handle_upload(request, get_dirs()[0], "source")
@@ -547,20 +752,23 @@ def upload_target():
 
 def _handle_upload(req, dest_dir, side):
     if "file" not in req.files:
-        return jsonify({"error": "No file"}), 400
-    saved = []
+        return jsonify({"error": "No file part"}), 400
+    saved, errors = [], []
     for f in req.files.getlist("file"):
         if not f.filename:
             continue
         save_name = secure_filename(f.filename)
         if Path(save_name).suffix.lower() not in SUPPORTED_EXT:
-            return jsonify({"error": f"Unsupported: {save_name}"}), 400
+            errors.append(f"Unsupported type: {save_name}")
+            continue
         f.save(str(dest_dir / save_name))
         log_event(f"Uploaded to {side}: {save_name}", "info")
         saved.append(save_name)
     if saved:
         threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    return jsonify({"ok": True, "saved": saved})
+    if errors and not saved:
+        return jsonify({"error": "; ".join(errors)}), 400
+    return jsonify({"ok": True, "saved": saved, "warnings": errors})
 
 
 @app.route("/api/upload/labels", methods=["POST"])
@@ -580,52 +788,182 @@ def upload_labels():
     return jsonify({"ok": True})
 
 
+# ── Template routes ─────────────────────────────────────────────────────────────
+
+@app.route("/api/templates", methods=["GET"])
+def api_templates_list():
+    return jsonify(_list_templates())
+
+
+@app.route("/api/templates/upload", methods=["POST"])
+def api_template_upload():
+    if "file" not in request.files:
+        return jsonify({"error": "No file"}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "No filename"}), 400
+    save_name = secure_filename(f.filename)
+    if Path(save_name).suffix.lower() not in TEMPLATE_EXT:
+        return jsonify({"error": "Use CSV, XLSX, or TXT"}), 400
+    dest = TEMPLATES_DIR / save_name
+    f.save(str(dest))
+    fields = _read_template_fields(dest)
+    log_event(
+        f"Template uploaded: {save_name} ({len(fields)} fields): "
+        f"{', '.join(fields[:6])}" + (" …" if len(fields) > 6 else ""),
+        "info",
+    )
+    return jsonify({
+        "ok": True, "filename": save_name,
+        "field_count": len(fields), "fields": fields,
+    })
+
+
+@app.route("/api/templates/<filename>", methods=["DELETE"])
+def api_template_delete(filename):
+    safe = secure_filename(filename)
+    path = TEMPLATES_DIR / safe
+    if not path.exists():
+        return jsonify({"error": "Not found"}), 404
+    path.unlink()
+    cfg = load_config()
+    if cfg.get("active_template") == safe:
+        cfg["active_template"] = ""
+        save_config(cfg)
+    log_event(f"Template deleted: {safe}", "info")
+    return jsonify({"ok": True})
+
+
+@app.route("/api/templates/activate", methods=["POST"])
+def api_template_activate():
+    data     = request.get_json(force=True)
+    filename = data.get("filename", "").strip()
+
+    if filename:
+        safe = secure_filename(filename)
+        path = TEMPLATES_DIR / safe
+        if not path.exists():
+            return jsonify({"error": f"Template not found: {safe}"}), 404
+        fields = _read_template_fields(path)
+        cfg    = load_config()
+        cfg["active_template"] = safe
+        save_config(cfg)
+        results_store.clear()
+        for n in file_states:
+            if file_states[n].get("state") == "done":
+                file_states[n]["state"] = "changed"
+        threading.Thread(target=scan_and_validate_all, daemon=True).start()
+        log_event(
+            f"Template activated: {safe} — validating "
+            f"{len(fields)} fields: "
+            f"{', '.join(fields[:6])}" + (" …" if len(fields) > 6 else ""),
+            "info",
+        )
+        return jsonify({
+            "ok": True, "active_template": safe,
+            "field_count": len(fields), "fields": fields,
+        })
+
+    # Deactivate
+    cfg = load_config()
+    cfg["active_template"] = ""
+    save_config(cfg)
+    results_store.clear()
+    for n in file_states:
+        if file_states[n].get("state") == "done":
+            file_states[n]["state"] = "changed"
+    threading.Thread(target=scan_and_validate_all, daemon=True).start()
+    log_event("Template deactivated — validating all fields", "info")
+    return jsonify({"ok": True, "active_template": ""})
+
+
+@app.route("/api/templates/sample", methods=["GET"])
+def api_template_sample():
+    """Download a sample field-selection template CSV."""
+    lines = [
+        "FIELD_NAME",
+        "# One SAP field name per row. Lines starting with # are ignored.",
+        "# You can use SAP 4.7 names OR S/4HANA names — both work.",
+        "# Example for Customer:",
+        "KUNNR",
+        "NAME1",
+        "KTOKD",
+        "LAND1",
+        "STRAS",
+        "ORT01",
+        "PSTLZ",
+        "REGIO",
+        "ZTERM",
+        "WAERS",
+        "TELF1",
+        "SPRAS",
+        "ERDAT",
+    ]
+    return Response(
+        "\n".join(lines).encode("utf-8"),
+        mimetype="text/csv",
+        headers={"Content-Disposition":
+                 "attachment; filename=sample_field_template.csv"},
+    )
+
+
+# ── Config ──────────────────────────────────────────────────────────────────────
+
 @app.route("/api/config", methods=["GET"])
 def api_get_config():
-    cfg = load_config()
-    custom    = _get_custom_labels()
+    cfg    = load_config()
+    custom = _get_custom_labels()
     available = []
     if results_store:
-        first = next(iter(results_store.values()))
+        first     = next(iter(results_store.values()))
         available = first.get("available_fields", [
             {"field": fr["field"], "label": get_label(fr["field"], custom),
              "in_source": True, "in_target": True, "common": True, "selected": True}
             for fr in first.get("field_results", [])
         ])
     return jsonify({
-        "source_dir":       cfg.get("source_dir",      DEFAULT_CONFIG["source_dir"]),
-        "target_dir":       cfg.get("target_dir",      DEFAULT_CONFIG["target_dir"]),
-        "pass_threshold":   cfg.get("pass_threshold",  100.0),
-        "selected_fields":  cfg.get("selected_fields", []),
-        "available_fields": available,
+        "source_dir":         cfg.get("source_dir",      DEFAULT_CONFIG["source_dir"]),
+        "target_dir":         cfg.get("target_dir",      DEFAULT_CONFIG["target_dir"]),
+        "pass_threshold":     cfg.get("pass_threshold",  100.0),
+        "selected_fields":    cfg.get("selected_fields", []),
+        "active_template":    cfg.get("active_template", ""),
+        "available_fields":   available,
         "labels_file_exists": LABELS_FILE.exists(),
-        "labels_file":      str(LABELS_FILE) if LABELS_FILE.exists() else None,
+        "labels_file":        str(LABELS_FILE) if LABELS_FILE.exists() else None,
     })
 
 
 @app.route("/api/config", methods=["POST"])
 def api_set_config():
-    data = request.get_json(force=True)
-    cfg  = load_config()
+    data    = request.get_json(force=True)
+    cfg     = load_config()
     changed = False
 
     for key in ("source_dir", "target_dir"):
         if key in data and str(data[key]).strip():
             np = str(Path(str(data[key]).strip()))
             if np != cfg.get(key):
-                cfg[key] = np; changed = True
+                cfg[key] = np
+                changed  = True
 
     if "pass_threshold" in data:
         thr = float(data["pass_threshold"])
         if thr != cfg.get("pass_threshold"):
-            cfg["pass_threshold"] = thr; changed = True
-            log_event(f"Pass threshold updated to {thr}%", "info")
+            cfg["pass_threshold"] = thr
+            changed = True
+            log_event(f"Pass threshold → {thr}%", "info")
 
     if "selected_fields" in data:
-        sel = [str(f).strip().upper() for f in data["selected_fields"] if str(f).strip()]
+        sel = [str(f).strip().upper() for f in data["selected_fields"]
+               if str(f).strip()]
         if sel != cfg.get("selected_fields", []):
-            cfg["selected_fields"] = sel; changed = True
-            log_event(f"Field selection: {len(sel)} fields" if sel else "Field selection: all fields", "info")
+            cfg["selected_fields"] = sel
+            changed = True
+            log_event(
+                f"Field selection: {len(sel)} fields" if sel
+                else "Field selection: all fields",
+                "info",
+            )
 
     if changed:
         save_config(cfg)
@@ -637,6 +975,8 @@ def api_set_config():
 
     return jsonify({"ok": True, "config": cfg})
 
+
+# ── Field preview ────────────────────────────────────────────────────────────────
 
 @app.route("/api/fields/preview", methods=["POST"])
 def api_fields_preview():
@@ -656,12 +996,14 @@ def api_fields_preview():
                 import openpyxl
                 wb   = openpyxl.load_workbook(str(p), read_only=True, data_only=True)
                 ws   = wb.active
-                cols = [str(c.value).strip().upper() for c in next(ws.iter_rows(max_row=1)) if c.value]
+                cols = [str(c.value).strip().upper()
+                        for c in next(ws.iter_rows(max_row=1)) if c.value]
                 wb.close()
             else:
                 import csv
                 with open(str(p), encoding="utf-8-sig") as f:
-                    cols = [c.strip().upper() for c in next(csv.reader(f, delimiter=delim))]
+                    cols = [c.strip().upper()
+                            for c in next(csv.reader(f, delimiter=delim))]
             return cols, None
         except Exception as e:
             return None, str(e)
@@ -684,27 +1026,44 @@ def api_fields_preview():
 
     fields = []
     for col in common:
-        fields.append({"field": col, "label": get_label(col, custom),
-                        "in_source": True, "in_target": True, "common": True,
-                        "selected": not selected_set or col in selected_set})
+        fields.append({
+            "field": col, "label": get_label(col, custom),
+            "in_source": True, "in_target": True, "common": True,
+            "selected": not selected_set or col in selected_set,
+        })
     for col in src_only:
-        fields.append({"field": col, "label": get_label(col, custom),
-                        "in_source": True, "in_target": False, "common": False, "selected": False})
+        fields.append({
+            "field": col, "label": get_label(col, custom),
+            "in_source": True, "in_target": False, "common": False,
+            "selected": False,
+        })
     for col in tgt_only:
-        fields.append({"field": col, "label": get_label(col, custom),
-                        "in_source": False, "in_target": True, "common": False, "selected": False})
+        fields.append({
+            "field": col, "label": get_label(col, custom),
+            "in_source": False, "in_target": True, "common": False,
+            "selected": False,
+        })
 
     return jsonify({
-        "fields": fields, "src_count": len(src_cols or []),
-        "tgt_count": len(tgt_cols or []), "common": len(common),
-        "src_only": len(src_only), "tgt_only": len(tgt_only), "errors": errors,
+        "fields":    fields,
+        "src_count": len(src_cols or []),
+        "tgt_count": len(tgt_cols or []),
+        "common":    len(common),
+        "src_only":  len(src_only),
+        "tgt_only":  len(tgt_only),
+        "errors":    errors,
     })
 
+
+# ── Files & pairs ────────────────────────────────────────────────────────────────
 
 @app.route("/api/files/list")
 def api_files_list():
     src, tgt = get_available_files()
-    return jsonify({"source_files": [f.name for f in src], "target_files": [f.name for f in tgt]})
+    return jsonify({
+        "source_files": [f.name for f in src],
+        "target_files": [f.name for f in tgt],
+    })
 
 
 @app.route("/api/pairs", methods=["GET"])
@@ -753,33 +1112,50 @@ def api_pairs_delete(name):
     return jsonify({"ok": True, "removed": removed})
 
 
+# ── Labels / reports / downloads ─────────────────────────────────────────────────
+
+@app.route("/api/labels/sample")
+def api_labels_sample():
+    lines = ["FIELD_NAME,FRIENDLY_LABEL"] + [
+        f"{k},{v}" for k, v in list(SAP_FIELD_LABELS.items())[:25]
+    ]
+    return Response(
+        "\n".join(lines).encode("utf-8"),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=sample_labels.csv"},
+    )
+
+
 @app.route("/api/objects")
 def api_objects():
     custom = _get_custom_labels()
     return jsonify([
-        {"key": k, "description": v.get("description", k),
-         "join_key": v.get("join_key", ""),
-         "join_key_label": get_label(v.get("join_key", ""), custom),
-         "key_fields": [{"field": f, "label": get_label(f, custom)} for f in v.get("key_fields", [])]}
+        {
+            "key":            k,
+            "description":    v.get("description", k),
+            "join_key":       v.get("join_key", ""),
+            "join_key_label": get_label(v.get("join_key", ""), custom),
+            "key_fields":     [
+                {"field": f, "label": get_label(f, custom)}
+                for f in v.get("key_fields", [])
+            ],
+        }
         for k, v in SAP_OBJECT_CONFIG.items()
     ])
-
-
-@app.route("/api/labels/sample")
-def api_labels_sample():
-    lines = ["FIELD_NAME,FRIENDLY_LABEL"] + [f"{k},{v}" for k, v in list(SAP_FIELD_LABELS.items())[:25]]
-    return Response("\n".join(lines).encode("utf-8"), mimetype="text/csv",
-                    headers={"Content-Disposition": "attachment; filename=sample_labels.csv"})
 
 
 @app.route("/api/download/<name>")
 def api_download(name):
     r = results_store.get(name.upper())
-    if not r: return jsonify({"error": "Not found"}), 404
+    if not r:
+        return jsonify({"error": "Not found"}), 404
     path = REPORTS_DIR / r.get("excel_file", "")
-    if not path.exists(): return jsonify({"error": "Missing"}), 404
-    return send_file(str(path), as_attachment=True, download_name=path.name,
-                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    if not path.exists():
+        return jsonify({"error": "Report file missing"}), 404
+    return send_file(
+        str(path), as_attachment=True, download_name=path.name,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.route("/api/download-file/<filename>")
@@ -787,43 +1163,69 @@ def api_download_file(filename):
     path = REPORTS_DIR / filename
     if not path.exists() or not filename.endswith(".xlsx"):
         return jsonify({"error": "Not found"}), 404
-    return send_file(str(path), as_attachment=True, download_name=filename,
-                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    return send_file(
+        str(path), as_attachment=True, download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.route("/api/reports")
 def api_reports():
-    files = sorted(REPORTS_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
-    return jsonify([{"filename": f.name, "size_kb": round(f.stat().st_size / 1024, 1),
-                     "modified": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")}
-                    for f in files])
+    files = sorted(
+        REPORTS_DIR.glob("*.xlsx"),
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,
+    )
+    return jsonify([
+        {
+            "filename": f.name,
+            "size_kb":  round(f.stat().st_size / 1024, 1),
+            "modified": datetime.fromtimestamp(
+                f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        for f in files
+    ])
 
 
 @app.route("/api/folders")
 def api_folders():
     s, t = get_dirs()
-    return jsonify({"source_dir": str(s), "target_dir": str(t), "reports_dir": str(REPORTS_DIR)})
+    return jsonify({
+        "source_dir":  str(s),
+        "target_dir":  str(t),
+        "reports_dir": str(REPORTS_DIR),
+    })
 
 
 @app.route("/api/clear-results", methods=["POST"])
 def api_clear_results():
-    results_store.clear(); file_states.clear(); activity_log.clear()
-    scan_status.update({"last_scan": None, "scanning": False, "error": None,
-                        "current_file": None, "total_files": 0, "completed_files": 0})
-    log_event("Results cleared manually", "info")
+    results_store.clear()
+    file_states.clear()
+    activity_log.clear()
+    scan_status.update({
+        "last_scan": None, "scanning": False, "error": None,
+        "current_file": None, "total_files": 0, "completed_files": 0,
+    })
+    log_event("Results cleared", "info")
     return jsonify({"ok": True})
 
+
+# ── Entry point ─────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     s, t = get_dirs()
     cfg  = load_config()
-    print("\n  Genpact SAP Validator V4")
-    print(f"  Source dir     -> {s}")
-    print(f"  Target dir     -> {t}")
-    print(f"  Reports        -> {REPORTS_DIR}")
-    print(f"  Pass threshold -> {cfg.get('pass_threshold', 100)}%")
-    print(f"  Field labels   -> {len(SAP_FIELD_LABELS)} built-in + config/field_labels.json")
-    print("  Open           -> http://localhost:5000\n")
+    print("\n  ╔══════════════════════════════════════╗")
+    print("  ║  Genpact SAP Migration Validator V4  ║")
+    print("  ╚══════════════════════════════════════╝")
+    print(f"  Source dir     → {s}")
+    print(f"  Target dir     → {t}")
+    print(f"  Templates      → {TEMPLATES_DIR}")
+    print(f"  Reports        → {REPORTS_DIR}")
+    print(f"  Pass threshold → {cfg.get('pass_threshold', 100)}%")
+    if cfg.get("active_template"):
+        print(f"  Active template→ {cfg['active_template']}")
+    print("  Open           → http://localhost:5000\n")
     threading.Thread(target=scan_and_validate_all, daemon=True).start()
     # threading.Thread(target=background_watcher, args=(60,), daemon=True).start()
     app.run(debug=False, port=5000, use_reloader=False)
