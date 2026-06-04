@@ -768,7 +768,36 @@ def _handle_upload(req, dest_dir, side):
         threading.Thread(target=scan_and_validate_all, daemon=True).start()
     if errors and not saved:
         return jsonify({"error": "; ".join(errors)}), 400
-    return jsonify({"ok": True, "saved": saved, "warnings": errors})
+
+    # ── Read headers immediately from uploaded file so dashboard can
+    # populate the field selector without waiting for a scan ──────────────────
+    custom   = _get_custom_labels()
+    headers  = {}
+    for fname in saved:
+        fpath = dest_dir / fname
+        try:
+            if side == "source":
+                cols, _ = _read_file_headers(str(fpath))
+            else:
+                _, cols = _read_file_headers(None, str(fpath))
+            cols = cols or []
+            headers[fname] = {
+                "columns": cols,
+                "labels":  {c: get_label(c, custom) for c in cols},
+                "count":   len(cols),
+            }
+            log_event(
+                f"Headers read from {side}/{fname}: "
+                f"{len(cols)} columns — {', '.join(cols[:6])}"
+                + (" …" if len(cols) > 6 else ""),
+                "info",
+            )
+        except Exception as e:
+            headers[fname] = {"error": str(e), "columns": [], "count": 0}
+            log_event(f"Could not read headers from {fname}: {e}", "warn")
+
+    return jsonify({"ok": True, "saved": saved, "warnings": errors,
+                    "side": side, "headers": headers})
 
 
 @app.route("/api/upload/labels", methods=["POST"])
@@ -913,21 +942,98 @@ def api_template_sample():
 def api_get_config():
     cfg    = load_config()
     custom = _get_custom_labels()
+    sel    = cfg.get("selected_fields", [])
+    sel_set = set(sel)
+
+    # ── Build available_fields from ACTUAL files on disk ─────────────────────
+    # Priority:
+    #   1. Read ALL source + target file headers directly from disk (always fresh)
+    #   2. Fall back to last scan result if no files found on disk
+    # This means the field selector always shows what is ACTUALLY in the files,
+    # not what was in the last scan — which may be a different file entirely.
+    src_dir, tgt_dir = get_dirs()
     available = []
-    if results_store:
+
+    try:
+        src_files = sorted([f for f in src_dir.iterdir()
+                            if f.suffix.lower() in SUPPORTED_EXT],
+                           key=lambda f: f.stat().st_mtime, reverse=True)
+        tgt_files = sorted([f for f in tgt_dir.iterdir()
+                            if f.suffix.lower() in SUPPORTED_EXT],
+                           key=lambda f: f.stat().st_mtime, reverse=True)
+
+        # Use the most recently modified source + target files
+        src_path = str(src_files[0]) if src_files else None
+        tgt_path = str(tgt_files[0]) if tgt_files else None
+
+        if src_path or tgt_path:
+            src_cols, tgt_cols = _read_file_headers(src_path or "", tgt_path or "")
+            src_set = set(src_cols)
+            tgt_set = set(tgt_cols)
+            common   = sorted(src_set & tgt_set)
+            src_only = sorted(src_set - tgt_set)
+            tgt_only = sorted(tgt_set - src_set)
+
+            for col in common:
+                available.append({
+                    "field":     col,
+                    "label":     get_label(col, custom),
+                    "in_source": True, "in_target": True, "common": True,
+                    "selected":  not sel_set or col in sel_set,
+                })
+            for col in src_only:
+                available.append({
+                    "field":     col,
+                    "label":     get_label(col, custom),
+                    "in_source": True, "in_target": False, "common": False,
+                    "selected":  False,
+                })
+            for col in tgt_only:
+                available.append({
+                    "field":     col,
+                    "label":     get_label(col, custom),
+                    "in_source": False, "in_target": True, "common": False,
+                    "selected":  False,
+                })
+
+            log_event(
+                f"Config: field list from disk — "
+                f"src={src_files[0].name if src_files else 'none'} "
+                f"({len(src_cols)} cols), "
+                f"tgt={tgt_files[0].name if tgt_files else 'none'} "
+                f"({len(tgt_cols)} cols), "
+                f"{len(common)} common",
+                "info",
+            )
+    except Exception as e:
+        log_event(f"Config: could not read file headers — {e}", "warn")
+
+    # Fallback to last scan result if disk read produced nothing
+    if not available and results_store:
         first     = next(iter(results_store.values()))
         available = first.get("available_fields", [
             {"field": fr["field"], "label": get_label(fr["field"], custom),
-             "in_source": True, "in_target": True, "common": True, "selected": True}
+             "in_source": True, "in_target": True, "common": True,
+             "selected":  not sel_set or fr["field"] in sel_set}
             for fr in first.get("field_results", [])
         ])
+
+    # Also include which files are currently on disk so the UI can show them
+    src_dir2, tgt_dir2 = get_dirs()
+    src_files_list = sorted([f.name for f in src_dir2.iterdir()
+                              if f.suffix.lower() in SUPPORTED_EXT])
+    tgt_files_list = sorted([f.name for f in tgt_dir2.iterdir()
+                              if f.suffix.lower() in SUPPORTED_EXT])
+
     return jsonify({
         "source_dir":         cfg.get("source_dir",      DEFAULT_CONFIG["source_dir"]),
         "target_dir":         cfg.get("target_dir",      DEFAULT_CONFIG["target_dir"]),
         "pass_threshold":     cfg.get("pass_threshold",  100.0),
-        "selected_fields":    cfg.get("selected_fields", []),
+        "selected_fields":    sel,
         "active_template":    cfg.get("active_template", ""),
         "available_fields":   available,
+        "source_files":       src_files_list,
+        "target_files":       tgt_files_list,
         "labels_file_exists": LABELS_FILE.exists(),
         "labels_file":        str(LABELS_FILE) if LABELS_FILE.exists() else None,
     })
@@ -977,6 +1083,91 @@ def api_set_config():
 
 
 # ── Field preview ────────────────────────────────────────────────────────────────
+
+@app.route("/api/fields/from-files", methods=["POST"])
+def api_fields_from_files():
+    """
+    Read headers from specific files already on disk by filename.
+    Body: {"source_file": "customers.csv", "target_file": "Export_Data.csv"}
+    Called when user picks a specific file pair to load fields from.
+    Returns full field list with labels immediately — no scan needed.
+    """
+    data     = request.get_json(force=True)
+    src_name = data.get("source_file", "").strip()
+    tgt_name = data.get("target_file", "").strip()
+    custom   = _get_custom_labels()
+    sel      = load_config().get("selected_fields", [])
+    sel_set  = set(sel)
+
+    src_dir, tgt_dir = get_dirs()
+    src_path = str(src_dir / src_name) if src_name else None
+    tgt_path = str(tgt_dir / tgt_name) if tgt_name else None
+
+    errors = {}
+    src_cols, tgt_cols = [], []
+
+    if src_path and Path(src_path).exists():
+        try:
+            src_cols, _ = _read_file_headers(src_path)
+        except Exception as e:
+            errors["source"] = str(e)
+    elif src_name:
+        errors["source"] = f"File not found: {src_name}"
+
+    if tgt_path and Path(tgt_path).exists():
+        try:
+            _, tgt_cols = _read_file_headers(None, tgt_path)
+        except Exception as e:
+            errors["target"] = str(e)
+    elif tgt_name:
+        errors["target"] = f"File not found: {tgt_name}"
+
+    src_set  = set(src_cols)
+    tgt_set  = set(tgt_cols)
+    common   = sorted(src_set & tgt_set)
+    src_only = sorted(src_set - tgt_set)
+    tgt_only = sorted(tgt_set - src_set)
+
+    fields = []
+    for col in common:
+        fields.append({
+            "field": col, "label": get_label(col, custom),
+            "in_source": True, "in_target": True, "common": True,
+            "selected": not sel_set or col in sel_set,
+        })
+    for col in src_only:
+        fields.append({
+            "field": col, "label": get_label(col, custom),
+            "in_source": True, "in_target": False, "common": False,
+            "selected": False,
+        })
+    for col in tgt_only:
+        fields.append({
+            "field": col, "label": get_label(col, custom),
+            "in_source": False, "in_target": True, "common": False,
+            "selected": False,
+        })
+
+    log_event(
+        f"Fields loaded from files: "
+        f"src={src_name}({len(src_cols)}) "
+        f"tgt={tgt_name}({len(tgt_cols)}) "
+        f"→ {len(common)} common, {len(src_only)} src-only, {len(tgt_only)} tgt-only",
+        "info",
+    )
+
+    return jsonify({
+        "fields":      fields,
+        "src_count":   len(src_cols),
+        "tgt_count":   len(tgt_cols),
+        "common":      len(common),
+        "src_only":    len(src_only),
+        "tgt_only":    len(tgt_only),
+        "errors":      errors,
+        "source_file": src_name,
+        "target_file": tgt_name,
+    })
+
 
 @app.route("/api/fields/preview", methods=["POST"])
 def api_fields_preview():
