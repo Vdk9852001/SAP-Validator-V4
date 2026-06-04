@@ -616,7 +616,6 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
 <script>
 var activeTable=null,allResults={},allStates={},lastLogCount=0;
 var uploadSide='source',uploadFileQueue=[];
-var previewedFiles={src:null,tgt:null};
 var currentFsFilter='all';
 
 async function init(){await refresh();setInterval(refresh,4000);}
@@ -635,13 +634,13 @@ async function refresh(){
   document.getElementById('thr-badge').textContent=
     'Threshold: '+thr+'%'+((!tmpl&&sel.length)?' | Fields: '+sel.length:'');
   var tmplBadge=document.getElementById('tmpl-badge');
-  if(tmpl){tmplBadge.style.display='';tmplBadge.textContent='📋 '+tmpl;}
+  if(tmpl){tmplBadge.style.display='';tmplBadge.textContent='Template: '+tmpl;}
   else{tmplBadge.style.display='none';}
   var newE=activity.slice(0,activity.length-lastLogCount);
-  if(lastLogCount>0) newE.forEach(e=>toast(e.message,e.level));
+  if(lastLogCount>0) newE.forEach(function(e){toast(e.message,e.level);});
   lastLogCount=activity.length;
   allResults={};allStates=status.file_states||{};
-  results.forEach(r=>{allResults[r.name]=r;});
+  results.forEach(function(r){allResults[r.name]=r;});
   renderSidebar(status);
   if(activeTable){
     var fs=allStates[activeTable];
@@ -654,17 +653,17 @@ async function triggerScan(){await fetch('/api/scan',{method:'POST'});setTimeout
 
 function renderSidebar(status){
   var list=document.getElementById('table-list'),html='';
-  status.pairs.forEach(pair=>{
+  status.pairs.forEach(function(pair){
     var fs=(status.file_states||{})[pair.name]||{},st=fs.state||'';
     if(!pair.has_pair){
       html+='<div class="sb-unmatched" onclick="openPairManager()" title="Click to pair">'+
-            '<div class="sb-icon sb-icon-warn">⚠</div>'+
+            '<div class="sb-icon sb-icon-warn">!</div>'+
             '<div style="min-width:0;flex:1"><div class="tname">'+esc(pair.name)+'</div>'+
-            '<div class="tsub">'+(pair.source_path?'no target':'no source')+' — click to pair</div></div></div>';
+            '<div class="tsub">'+(pair.source_path?'no target':'no source')+' - click to pair</div></div></div>';
       return;
     }
     var pill='';
-    if(st==='validating') pill='<span class="sp sp-val">…</span>';
+    if(st==='validating') pill='<span class="sp sp-val">...</span>';
     else{
       var r=allResults[pair.name],s=r?r.status:'';
       if(s==='PASS')         pill='<span class="sp sp-pass">PASS</span>';
@@ -676,19 +675,18 @@ function renderSidebar(status){
     var act=activeTable===pair.name?'active':'';
     var isManual=pair.match_type==='manual';
     html+='<div class="sb-item '+act+'" onclick="selectTable(\''+pair.name+'\',this)">'+
-          '<div class="sb-icon sb-icon-tbl">📊</div>'+
+          '<div class="sb-icon sb-icon-tbl">T</div>'+
           '<div style="min-width:0;flex:1">'+
           '<div class="tname">'+esc(pair.name)+(isManual?' <span style="font-size:9px;font-weight:400;color:var(--accent)">[paired]</span>':'')+'</div>'+
-          '<div class="tsub">'+esc(pair.source_file)+' ↔ '+esc(pair.target_file)+'</div></div>'+pill+'</div>';
+          '<div class="tsub">'+esc(pair.source_file)+' vs '+esc(pair.target_file)+'</div></div>'+pill+'</div>';
   });
-  if(!html) html='<div style="padding:18px 15px;font-size:12px;color:var(--muted);line-height:1.6">'+
-    'No file pairs found.<br>Upload files and use <b>Pairs</b> to link them.</div>';
+  if(!html) html='<div style="padding:18px 15px;font-size:12px;color:var(--muted);line-height:1.6">No file pairs found.<br>Upload files and use Pairs to link them.</div>';
   list.innerHTML=html;
 }
 
 function selectTable(name,el){
   activeTable=name;
-  document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.sb-item').forEach(function(e){e.classList.remove('active');});
   if(el) el.classList.add('active');
   var fs=allStates[name]||{};
   if(fs.state==='validating'){renderValidating(name,fs);return;}
@@ -697,7 +695,7 @@ function selectTable(name,el){
   document.getElementById('detail').style.display='block';
   document.getElementById('detail').innerHTML=
     '<div class="banner bn-val"><span class="spinner"></span>'+
-    '<span><b>'+esc(name)+'</b> — detected, waiting for validation…</span></div>';
+    '<span><b>'+esc(name)+'</b> detected, waiting for validation...</span></div>';
 }
 
 function renderValidating(name,fs){
@@ -705,8 +703,8 @@ function renderValidating(name,fs){
   document.getElementById('detail').style.display='block';
   document.getElementById('detail').innerHTML=
     '<div class="banner bn-val"><span class="spinner"></span>'+
-    '<span><b>'+esc(name)+'</b> validating now… '+
-    (fs.source_file?'('+esc(fs.source_file)+' ↔ '+esc(fs.target_file)+')':'')+
+    '<span><b>'+esc(name)+'</b> validating now... '+
+    (fs.source_file?'('+esc(fs.source_file)+' vs '+esc(fs.target_file)+')':'')+
     '</span></div>'+
     '<div style="color:var(--muted);font-size:12px;padding:14px 0">Results will appear automatically.</div>';
 }
@@ -718,23 +716,20 @@ function renderDetail(r){
   var thr=r.pass_threshold||100, sel=r.selected_fields||[];
   var pc=r.status==='PASS'?'pill-pass':r.status==='WARNING'?'pill-warn':r.status==='ERROR'?'pill-err':'pill-fail';
   var fs=allStates[r.name]||{};
-  var banner=fs.state==='changed'?'<div class="banner bn-chg">⚠ File changed — re-validation queued.</div>':'';
+  var banner=fs.state==='changed'?'<div class="banner bn-chg">File changed - re-validation queued.</div>':'';
   var bClass=r.status==='PASS'?'bn-pass':r.status==='WARNING'?'bn-chg':'bn-fail';
   var businessMsg=r.business_message?'<div class="banner '+bClass+'">'+esc(r.business_message)+'</div>':'';
   var dlBtn=r.excel_file
-    ?'<a class="dl-btn" href="/api/download/'+encodeURIComponent(r.name)+'" download="'+esc(r.excel_file)+'">↓ Excel</a>'
-    :'<span class="dl-btn disabled">↓ Excel</span>';
-  var err=r.errors&&r.errors.length?'<div class="err-box">✗ '+r.errors.map(esc).join('<br>')+'</div>':'';
-
-  // Info bar: threshold + template or field selection
-  var thrHtml='<span class="info-bar">✓ Threshold: <b>'+thr+'%</b>'
-    +((!r.template_used&&sel.length)?' &nbsp;·&nbsp; <b>'+sel.length+'</b> selected fields':' &nbsp;·&nbsp; All fields')
+    ?'<a class="dl-btn" href="/api/download/'+encodeURIComponent(r.name)+'" download="'+esc(r.excel_file)+'">Download Excel</a>'
+    :'<span class="dl-btn disabled">Download Excel</span>';
+  var err=r.errors&&r.errors.length?'<div class="err-box">Error: '+r.errors.map(esc).join('<br>')+'</div>':'';
+  var thrHtml='<span class="info-bar">Pass threshold: <b>'+thr+'%</b>'
+    +((!r.template_used&&sel.length)?' &nbsp;|&nbsp; <b>'+sel.length+'</b> selected fields':' &nbsp;|&nbsp; All fields')
     +'</span>';
   var tmplHtml=r.template_used
-    ?'<span class="tmpl-bar">📋 Template: <b>'+esc(r.template_used)+'</b> ('+
+    ?'<span class="tmpl-bar">Template: <b>'+esc(r.template_used)+'</b> ('+
       (r.total_fields||0)+' fields validated)</span>'
     :'';
-
   var so=r.records_only_in_source, to=r.records_only_in_target;
   var cards='<div class="cards">'+
     card(fmt(r.total_source_records),'Source records','')+
@@ -746,28 +741,26 @@ function renderDetail(r){
     card(r.fields_failed,'Fields failed',r.fields_failed?'warn':'ok')+
     card(r.pass_rate_pct+'%','Pass rate','blue')+
     '</div>';
-
-  // Mapping panel
   var mapHtml='';
   if(r.mapping){
     var m=r.mapping,ml=m.matched_labels||{},sol=m.source_only_labels||{},tol=m.target_only_labels||{};
     var so2=m.source_only_fields&&m.source_only_fields.length
-      ?m.source_only_fields.map(f=>'<span class="mtag w" title="'+esc(f)+'">'+(sol[f]||f)+(sol[f]&&sol[f]!==f?'<small>'+f+'</small>':'')+'</span>').join('')
+      ?m.source_only_fields.map(function(f){return '<span class="mtag w" title="'+esc(f)+'">'+(sol[f]||f)+(sol[f]&&sol[f]!==f?'<small>'+f+'</small>':'')+'</span>';}).join('')
       :'<span style="color:var(--muted);font-size:10px">none</span>';
     var to2=m.target_only_fields&&m.target_only_fields.length
-      ?m.target_only_fields.map(f=>'<span class="mtag w" title="'+esc(f)+'">'+(tol[f]||f)+(tol[f]&&tol[f]!==f?'<small>'+f+'</small>':'')+'</span>').join('')
+      ?m.target_only_fields.map(function(f){return '<span class="mtag w" title="'+esc(f)+'">'+(tol[f]||f)+(tol[f]&&tol[f]!==f?'<small>'+f+'</small>':'')+'</span>';}).join('')
       :'<span style="color:var(--muted);font-size:10px">none</span>';
     var nums=m.numeric_fields&&m.numeric_fields.length
-      ?m.numeric_fields.map(f=>'<span class="mtag num">'+(ml[f]||f)+'<small>'+f+' ±'+m.tolerance_map[f]+'</small></span>').join('')
+      ?m.numeric_fields.map(function(f){return '<span class="mtag num">'+(ml[f]||f)+'<small>'+f+' +/-'+m.tolerance_map[f]+'</small></span>';}).join('')
       :'<span style="color:var(--muted);font-size:10px">none</span>';
     var crossHtml='';
     if(r.field_mapping_detail&&r.field_mapping_detail.mapped_fields){
-      var crosses=r.field_mapping_detail.mapped_fields.filter(d=>d.method!=='exact');
+      var crosses=r.field_mapping_detail.mapped_fields.filter(function(d){return d.method!=='exact';});
       if(crosses.length){
         crossHtml='<div class="map-box" style="grid-column:1/-1"><h5>Cross-name mappings ('+crosses.length+')</h5>'+
-          crosses.map(d=>'<span class="mtag cross">'+(d.source_label||d.source_field)+
-            '<small>'+esc(d.source_field)+' → '+esc(d.target_field)+'</small>'+
-            '<small style="opacity:.7">'+d.method+'</small></span>').join('')+'</div>';
+          crosses.map(function(d){return '<span class="mtag cross">'+(d.source_label||d.source_field)+
+            '<small>'+esc(d.source_field)+' -> '+esc(d.target_field)+'</small>'+
+            '<small style="opacity:.7">'+d.method+'</small></span>';}).join('')+'</div>';
       }
     }
     mapHtml='<div class="sec">Auto-detected mapping</div><div class="map-grid">'+
@@ -778,24 +771,21 @@ function renderDetail(r){
       '<div class="map-box"><h5>Target-only (not validated)</h5>'+to2+'</div>'+
       crossHtml+'</div>';
   }
-
-  // Field results
-  var frows=r.field_results.map((fr,i)=>{
+  var frows=r.field_results.map(function(fr,i){
     var pct=fr.match_pct,fthr=fr.pass_threshold||thr;
     var bc=pct>=fthr?'var(--pass)':pct>=(fthr*0.8)?'var(--warn)':'var(--fail)';
     var stBadge=fr.status==='PASS'?'<span class="bdg b-pass">PASS</span>':'<span class="bdg b-fail">FAIL</span>';
     var typeTag=fr.type==='numeric'
-      ?'<span class="tn">Numeric ±'+fr.tolerance+'</span>'
+      ?'<span class="tn">Numeric +/-'+fr.tolerance+'</span>'
       :'<span class="ts">Text</span>';
     var displayName=fr.display_name||fr.field_label||fr.field;
     var isCross=fr.is_cross_mapped||false;
     var techLine=isCross
-      ?'<div class="ft">'+esc(fr.field)+' <span style="color:var(--accent)">→</span> '+esc(fr.field_target||'')+'</div>'
+      ?'<div class="ft">'+esc(fr.field)+' <span style="color:var(--accent)">-></span> '+esc(fr.field_target||'')+'</div>'
       :'<div class="ft">'+esc(fr.field)+'</div>';
     var methodBadge='';
     if(fr.mapping_method&&fr.mapping_method!=='exact'){
-      var ml2={alias_object:'alias',alias_global:'global alias',
-               fuzzy:'fuzzy ('+Math.round((fr.mapping_confidence||0)*100)+'%)'};
+      var ml2={alias_object:'alias',alias_global:'global alias',fuzzy:'fuzzy ('+Math.round((fr.mapping_confidence||0)*100)+'%)'};
       methodBadge=' <span style="font-size:9px;padding:1px 6px;border-radius:4px;background:var(--accent-light);color:var(--accent)">'+(ml2[fr.mapping_method]||fr.mapping_method)+'</span>';
     }
     var totalMiss=fr.mismatch_count||(fr.mismatches?fr.mismatches.length:0);
@@ -803,17 +793,17 @@ function renderDetail(r){
     var hasMiss=totalMiss>0||issues>0;
     var expBtn=hasMiss
       ?'<button class="exp-btn" id="eb-'+i+'" onclick="toggleRow('+i+',event)">'+
-        '<i class="arr">▶</i> '+fmt(totalMiss)+' mismatch'+(totalMiss!==1?'es':'')+'</button>'
+        '<i class="arr">&#9658;</i> '+fmt(totalMiss)+' mismatch'+(totalMiss!==1?'es':'')+'</button>'
       :'';
     var missHtml='';
     if(hasMiss&&fr.mismatches&&fr.mismatches.length>0){
-      var rows=fr.mismatches.slice(0,20).map(m=>
-        '<tr><td style="font-family:monospace;font-size:10px;color:var(--muted)">'+esc(String(m.material))+'</td>'+
+      var rows=fr.mismatches.slice(0,20).map(function(m){
+        return '<tr><td style="font-family:monospace;font-size:10px;color:var(--muted)">'+esc(String(m.material))+'</td>'+
         '<td class="dold">'+esc(String(m.source_value))+'</td>'+
         '<td class="dnew">'+esc(String(m.target_value))+'</td>'+
-        '<td style="font-size:10px;color:var(--muted)">'+esc(m.issue)+'</td></tr>'
-      ).join('');
-      var moreNote=totalMiss>20?'<div class="more-note">Showing 20 of '+fmt(totalMiss)+' — download Excel for full list.</div>':'';
+        '<td style="font-size:10px;color:var(--muted)">'+esc(m.issue)+'</td></tr>';
+      }).join('');
+      var moreNote=totalMiss>20?'<div class="more-note">Showing 20 of '+fmt(totalMiss)+' - download Excel for full list.</div>':'';
       missHtml='<div class="miss-inner"><table><thead><tr>'+
         '<th>Key</th><th>Source ('+esc(fr.field)+')</th>'+
         '<th>Target ('+esc(fr.field_target||fr.field)+')</th><th>Issue</th>'+
@@ -836,16 +826,15 @@ function renderDetail(r){
       '<td>'+(hasMiss?'<b style="color:var(--fail)">'+fmt(issues)+'</b>':fmt(issues))+'</td>'+
       '<td><div class="bar-w"><div class="bar-bg"><div class="bar-f" style="width:'+pct+'%;background:'+bc+'"></div></div>'+
         '<span class="bar-v" style="color:'+bc+'">'+pct+'%</span></div></td>'+
-      '<td><span style="font-size:10px;color:var(--muted)">≥'+fthr+'%</span></td>'+
+      '<td><span style="font-size:10px;color:var(--muted)">>='+fthr+'%</span></td>'+
       '<td>'+stBadge+'</td></tr>'+detRow;
   }).join('');
-
   det.innerHTML=banner+businessMsg+err+
     '<div class="det-hdr">'+
     '<div><div class="det-title">'+esc(r.name)+'</div>'+
-    '<div class="det-meta">'+esc(r.source_file)+' ↔ '+esc(r.target_file)+
-    ' · '+esc(r.run_at)+
-    (r.sap_object?' · <span style="color:var(--muted)">'+esc(r.sap_object)+'</span>':'')+
+    '<div class="det-meta">'+esc(r.source_file)+' vs '+esc(r.target_file)+
+    ' - '+esc(r.run_at)+
+    (r.sap_object?' - <span style="color:var(--muted)">'+esc(r.sap_object)+'</span>':'')+
     '</div></div>'+
     '<div class="det-right">'+dlBtn+'<span class="st-pill '+pc+'">'+r.status+'</span></div></div>'+
     thrHtml+tmplHtml+cards+mapHtml+
@@ -865,11 +854,11 @@ function toggleRow(i,event){
   if(btn) btn.classList.toggle('open',!open);
 }
 
-// ── Upload modal ──────────────────────────────────────────────────────────────
+// Upload modal
 function openUploadModal(side){
   uploadSide=side;uploadFileQueue=[];
   document.getElementById('upload-modal-title').textContent=
-    '⬆ Upload '+(side==='source'?'Source':'Target')+' Files';
+    'Upload '+(side==='source'?'Source':'Target')+' Files';
   document.getElementById('upload-queue').style.display='none';
   document.getElementById('upload-queue-rows').innerHTML='';
   document.getElementById('upload-status').textContent='';
@@ -878,21 +867,22 @@ function openUploadModal(side){
 }
 function onUploadFilesChosen(input){
   if(!input.files||!input.files.length) return;
-  uploadFileQueue=Array.from(input.files).map(f=>({file:f}));
-  document.getElementById('upload-queue-rows').innerHTML=uploadFileQueue.map(item=>
-    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;'+
+  uploadFileQueue=Array.from(input.files).map(function(f){return {file:f};});
+  document.getElementById('upload-queue-rows').innerHTML=uploadFileQueue.map(function(item){
+    return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;'+
     'padding:9px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px">'+
     '<span style="font-size:12px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500">'+
-    '📄 '+esc(item.file.name)+'</span>'+
-    '<span style="font-size:10px;color:var(--muted)">'+fmt(Math.round(item.file.size/1024))+' KB</span></div>'
-  ).join('');
+    esc(item.file.name)+'</span>'+
+    '<span style="font-size:10px;color:var(--muted)">'+fmt(Math.round(item.file.size/1024))+' KB</span></div>';
+  }).join('');
   document.getElementById('upload-queue').style.display='block';
 }
 async function confirmUpload(){
   var st=document.getElementById('upload-status');
-  st.style.color='var(--muted)';st.textContent='Uploading…';
+  st.style.color='var(--muted)';st.textContent='Uploading...';
   var saved=[],errors=[];
-  for(var item of uploadFileQueue){
+  for(var i=0;i<uploadFileQueue.length;i++){
+    var item=uploadFileQueue[i];
     var fd=new FormData();fd.append('file',item.file,item.file.name);
     try{
       var res=await fetch('/api/upload/'+uploadSide,{method:'POST',body:fd});
@@ -902,42 +892,43 @@ async function confirmUpload(){
     }catch(e){errors.push(String(e));}
   }
   if(errors.length&&!saved.length){st.style.color='var(--fail)';st.textContent='Errors: '+errors.join(', ');return;}
-  st.style.color='var(--pass)';st.textContent='✓ Uploaded: '+saved.join(', ');
+  st.style.color='var(--pass)';st.textContent='Uploaded: '+saved.join(', ');
   var stEl=document.getElementById(uploadSide==='source'?'src-st':'tgt-st');
-  if(stEl){stEl.style.color='var(--pass)';stEl.textContent='✓ '+saved.join(', ');}
+  if(stEl){stEl.style.color='var(--pass)';stEl.textContent='OK: '+saved.join(', ');}
   toast('Uploaded to '+uploadSide+': '+saved.join(', '),'success');
-  setTimeout(()=>{closeModal('upload-modal');refresh();},900);
+  setTimeout(function(){closeModal('upload-modal');refresh();},900);
 }
 
-// ── Pair manager ──────────────────────────────────────────────────────────────
+// Pair manager
 async function openPairManager(){
   document.getElementById('pair-modal').classList.add('open');
   document.getElementById('pair-create-status').textContent='';
-  await loadPairDropdowns();await loadExistingPairs();
+  await loadPairDropdowns();
+  await loadExistingPairs();
 }
 async function loadPairDropdowns(){
-  var data=await fetch('/api/files/list').then(r=>r.json());
+  var data=await fetch('/api/files/list').then(function(r){return r.json();});
   document.getElementById('pair-src-sel').innerHTML=
-    '<option value="">— choose source file —</option>'+
-    (data.source_files||[]).map(f=>'<option value="'+esc(f)+'">'+esc(f)+'</option>').join('');
+    '<option value="">-- choose source file --</option>'+
+    (data.source_files||[]).map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('');
   document.getElementById('pair-tgt-sel').innerHTML=
-    '<option value="">— choose target file —</option>'+
-    (data.target_files||[]).map(f=>'<option value="'+esc(f)+'">'+esc(f)+'</option>').join('');
+    '<option value="">-- choose target file --</option>'+
+    (data.target_files||[]).map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('');
 }
 async function loadExistingPairs(){
-  var pairs=await fetch('/api/pairs').then(r=>r.json());
+  var pairs=await fetch('/api/pairs').then(function(r){return r.json();});
   var el=document.getElementById('existing-pairs-list');
   if(!pairs||!pairs.length){
     el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:8px 0">No manual pairs. All pairs are auto-matched by filename.</div>';
     return;
   }
-  el.innerHTML=pairs.map(p=>
-    '<div style="display:flex;align-items:center;gap:9px;padding:9px 12px;'+
+  el.innerHTML=pairs.map(function(p){
+    return '<div style="display:flex;align-items:center;gap:9px;padding:9px 12px;'+
     'background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">'+
     '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12px">'+esc(p.name)+'</div>'+
-    '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+esc(p.source_file)+' ↔ '+esc(p.target_file)+'</div></div>'+
-    '<button onclick="deletePair(\''+esc(p.name)+'\')" class="t-btn del">✕ Remove</button></div>'
-  ).join('');
+    '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+esc(p.source_file)+' vs '+esc(p.target_file)+'</div></div>'+
+    '<button onclick="deletePair(\''+esc(p.name)+'\')" class="t-btn del">Remove</button></div>';
+  }).join('');
 }
 async function createPair(){
   var srcFile=document.getElementById('pair-src-sel').value;
@@ -948,17 +939,17 @@ async function createPair(){
   if(!tgtFile){st.style.color='var(--fail)';st.textContent='Select a target file.';return;}
   if(!pairName){st.style.color='var(--fail)';st.textContent='Enter a pair name (e.g. CUSTOMER).';return;}
   if(srcFile===tgtFile){st.style.color='var(--fail)';st.textContent='Source and target must differ.';return;}
-  st.style.color='var(--muted)';st.textContent='Saving…';
-  var existing=await fetch('/api/pairs').then(r=>r.json());
-  var filtered=existing.filter(p=>p.name!==pairName);
+  st.style.color='var(--muted)';st.textContent='Saving...';
+  var existing=await fetch('/api/pairs').then(function(r){return r.json();});
+  var filtered=existing.filter(function(p){return p.name!==pairName;});
   filtered.push({name:pairName,source_file:srcFile,target_file:tgtFile});
   var res=await fetch('/api/pairs',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({pairs:filtered})});
   var data=await res.json();
   if(data.ok){
-    st.style.color='var(--pass)';st.textContent='✓ Pair created: '+pairName;
+    st.style.color='var(--pass)';st.textContent='Pair created: '+pairName;
     toast('Pair created: '+pairName,'success');
-    await loadExistingPairs();setTimeout(()=>refresh(),400);
+    await loadExistingPairs();setTimeout(function(){refresh();},400);
   }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
 }
 async function deletePair(name){
@@ -967,36 +958,36 @@ async function deletePair(name){
   await loadExistingPairs();refresh();
 }
 
-// ── Log / Reports ─────────────────────────────────────────────────────────────
+// Log / Reports
 async function openLog(){
   document.getElementById('log-modal').classList.add('open');
-  var activity=await fetch('/api/activity').then(r=>r.json());
+  var activity=await fetch('/api/activity').then(function(r){return r.json();});
   var el=document.getElementById('log-list');
   if(!activity.length){el.innerHTML='<div class="empty-msg">No activity yet.</div>';return;}
-  var icons={info:'ℹ',success:'✓',warn:'⚠',error:'✗'};
-  el.innerHTML=activity.map(e=>
-    '<div class="le '+e.level+'"><span class="le-ts">'+e.ts+'</span>'+
-    '<span class="le-m">'+(icons[e.level]||'')+' '+esc(e.message)+'</span></div>'
-  ).join('');
+  var icons={info:'i',success:'OK',warn:'!',error:'X'};
+  el.innerHTML=activity.map(function(e){
+    return '<div class="le '+e.level+'"><span class="le-ts">'+e.ts+'</span>'+
+    '<span class="le-m">'+(icons[e.level]||'')+' '+esc(e.message)+'</span></div>';
+  }).join('');
 }
 async function openReports(){
   document.getElementById('rep-modal').classList.add('open');
   var list=document.getElementById('rep-list');
-  list.innerHTML='<div class="empty-msg">Loading…</div>';
-  var reports=await fetch('/api/reports').then(r=>r.json());
+  list.innerHTML='<div class="empty-msg">Loading...</div>';
+  var reports=await fetch('/api/reports').then(function(r){return r.json();});
   if(!reports.length){list.innerHTML='<div class="empty-msg">No reports yet.</div>';return;}
-  list.innerHTML=reports.map(rep=>
-    '<div class="rep-row"><span class="rep-nm">📊 '+esc(rep.filename)+'</span>'+
-    '<span class="rep-mt">'+rep.size_kb+'KB · '+rep.modified+'</span>'+
+  list.innerHTML=reports.map(function(rep){
+    return '<div class="rep-row"><span class="rep-nm">'+esc(rep.filename)+'</span>'+
+    '<span class="rep-mt">'+rep.size_kb+'KB - '+rep.modified+'</span>'+
     '<a class="rep-dl" href="/api/download-file/'+encodeURIComponent(rep.filename)+
-    '" download="'+esc(rep.filename)+'">↓ Download</a></div>'
-  ).join('');
+    '" download="'+esc(rep.filename)+'">Download</a></div>';
+  }).join('');
 }
 
-// ── Settings ─────────────────────────────────────────────────────────────────────────────────
+// Settings
 async function openSettings(){
   document.getElementById('set-modal').classList.add('open');
-  var cfg=await fetch('/api/config').then(r=>r.json());
+  var cfg=await fetch('/api/config').then(function(r){return r.json();});
   document.getElementById('cfg-src').value=cfg.source_dir||'';
   document.getElementById('cfg-tgt').value=cfg.target_dir||'';
   var thr=cfg.pass_threshold||100;
@@ -1004,28 +995,25 @@ async function openSettings(){
   document.getElementById('thr-display').textContent=thr+'%';
   document.getElementById('lbl-current').textContent=
     cfg.labels_file_exists?'Custom labels loaded: '+cfg.labels_file:'Using built-in SAP field dictionary.';
-
-  // Populate file dropdowns from actual files on disk (always fresh, not from last scan)
+  // Populate file dropdowns from disk
   var srcFiles=cfg.source_files||[], tgtFiles=cfg.target_files||[];
   var srcSel=document.getElementById('fs-src-sel');
   var tgtSel=document.getElementById('fs-tgt-sel');
-  srcSel.innerHTML='<option value="">— select source file —</option>'+
-    srcFiles.map(f=>'<option value="'+esc(f)+'">'+esc(f)+'</option>').join('');
-  tgtSel.innerHTML='<option value="">— select target file —</option>'+
-    tgtFiles.map(f=>'<option value="'+esc(f)+'">'+esc(f)+'</option>').join('');
-  // Auto-select if only one file per side
+  srcSel.innerHTML='<option value="">-- select source file --</option>'+
+    srcFiles.map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('');
+  tgtSel.innerHTML='<option value="">-- select target file --</option>'+
+    tgtFiles.map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('');
   if(srcFiles.length===1) srcSel.value=srcFiles[0];
   if(tgtFiles.length===1) tgtSel.value=tgtFiles[0];
-
-  // Show current field list (from disk-read, not last scan)
+  // Show current fields
   var sel=cfg.selected_fields||[];
   var avail=cfg.available_fields||[];
   if(avail.length){
-    var enriched=avail.map(f=>({...f,selected:sel.length===0||sel.includes(f.field)}));
+    var enriched=avail.map(function(f){return Object.assign({},f,{selected:sel.length===0||sel.indexOf(f.field)>=0});});
     renderFieldCheckboxes(enriched,{
-      common:   enriched.filter(f=>f.common).length,
-      src_only: enriched.filter(f=>f.in_source&&!f.in_target).length,
-      tgt_only: enriched.filter(f=>!f.in_source&&f.in_target).length,
+      common:   enriched.filter(function(f){return f.common;}).length,
+      src_only: enriched.filter(function(f){return f.in_source&&!f.in_target;}).length,
+      tgt_only: enriched.filter(function(f){return !f.in_source&&f.in_target;}).length,
     });
     var fst=document.getElementById('field-st');
     fst.style.color=sel.length?'var(--pass)':'var(--muted)';
@@ -1033,84 +1021,73 @@ async function openSettings(){
     var info=document.getElementById('fs-file-info');
     if(info&&(srcFiles.length||tgtFiles.length)){
       info.style.display='';
-      info.innerHTML='ℹ Currently showing: <b>'+(srcFiles[0]||'?')+'</b> ↔ <b>'+(tgtFiles[0]||'?')+'</b>. Select different files above and click ⚡ Load to change.';
+      info.textContent='Currently showing fields from: '+(srcFiles[0]||'?')+' vs '+(tgtFiles[0]||'?')+
+        '. Select different files and click Load to change.';
     }
   }else{
     document.getElementById('field-checkboxes').innerHTML=
-      '<div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">Select files above and click ⚡ Load fields.</div>';
+      '<div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">Select files above and click Load fields.</div>';
   }
   await loadTemplateList(cfg.active_template||'');
 }
 
-// Triggered when either file dropdown changes
 function onFsFileChanged(){
   var st=document.getElementById('prev-status');
   var srcFile=document.getElementById('fs-src-sel').value;
   var tgtFile=document.getElementById('fs-tgt-sel').value;
   if(srcFile||tgtFile){
     st.style.color='var(--muted)';
-    st.textContent=(srcFile||'(none)')+' ↔ '+(tgtFile||'(none)')+' — click Load fields.';
+    st.textContent=(srcFile||'(none)')+' vs '+(tgtFile||'(none)')+' - click Load fields.';
   }
 }
 
-// Read columns directly from uploaded files on server — instant, no scan needed
 async function loadFieldsFromSelected(){
   var st=document.getElementById('prev-status');
   var srcFile=document.getElementById('fs-src-sel').value;
   var tgtFile=document.getElementById('fs-tgt-sel').value;
-  if(!srcFile&&!tgtFile){
-    st.style.color='var(--warn)';st.textContent='Select at least one file first.';return;
-  }
-  st.style.color='var(--muted)';st.textContent='Reading column headers…';
+  if(!srcFile&&!tgtFile){st.style.color='var(--warn)';st.textContent='Select at least one file first.';return;}
+  st.style.color='var(--muted)';st.textContent='Reading column headers...';
   try{
     var res=await fetch('/api/fields/from-files',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+      method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({source_file:srcFile,target_file:tgtFile})
     });
     var data=await res.json();
     if(data.errors&&Object.keys(data.errors).length&&(!data.fields||!data.fields.length)){
       st.style.color='var(--fail)';st.textContent=Object.values(data.errors).join(' | ');return;
     }
-    if(!data.fields||!data.fields.length){
-      st.style.color='var(--warn)';st.textContent='No columns found in selected files.';return;
-    }
+    if(!data.fields||!data.fields.length){st.style.color='var(--warn)';st.textContent='No columns found.';return;}
     renderFieldCheckboxes(data.fields,data);
     st.style.color='var(--pass)';
-    st.textContent='✓ '+data.fields.length+' fields loaded — '+
+    st.textContent=data.fields.length+' fields loaded - '+
       data.common+' common'+(data.src_only?', '+data.src_only+' source-only':'')+
-      (data.tgt_only?', '+data.tgt_only+' target-only':'')+'.'
+      (data.tgt_only?', '+data.tgt_only+' target-only':'');
     var info=document.getElementById('fs-file-info');
-    if(info){
-      info.style.display='';
-      info.innerHTML='Showing columns from: <b>'+(srcFile||'none')+'</b> ↔ <b>'+(tgtFile||'none')+'</b>';
-    }
+    if(info){info.style.display='';info.textContent='Fields from: '+(srcFile||'none')+' vs '+(tgtFile||'none');}
   }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
 }
-  await loadTemplateList(cfg.active_template||'');
-}
 
-// ── Template management ───────────────────────────────────────────────────────
+// Template management
 async function loadTemplateList(activeTemplate){
-  var templates=await fetch('/api/templates').then(r=>r.json());
+  var templates=await fetch('/api/templates').then(function(r){return r.json();});
   var el=document.getElementById('template-list');
   var st=document.getElementById('tmpl-st');
   if(!templates||!templates.length){
     el.innerHTML='<div style="background:var(--surface2);border:1px dashed var(--border);'+
       'border-radius:9px;padding:16px;text-align:center;font-size:12px;color:var(--muted)">'+
-      'No templates uploaded yet.<br>Upload a CSV with one field name per row to get started.</div>';
+      'No templates uploaded yet. Upload a CSV with one field name per row to get started.</div>';
     st.textContent='';st.style.color='var(--muted)';
     return;
   }
-  el.innerHTML=templates.map(t=>{
+  el.innerHTML=templates.map(function(t){
     var isActive=t.is_active||(t.filename===activeTemplate);
-    var preview=(t.fields||[]).slice(0,8).map(f=>'<code style="font-size:9px;margin:1px">'+esc(f)+'</code>').join(' ')+
-      (t.field_count>8?' <span style="font-size:9px;color:var(--muted)">+'+（t.field_count-8)+' more</span>':'');
+    var preview=(t.fields||[]).slice(0,8).map(function(f){return '<code style="font-size:9px;margin:1px">'+esc(f)+'</code>';}).join(' ')+
+      (t.field_count>8?' <span style="font-size:9px;color:var(--muted)">+'+(t.field_count-8)+' more</span>':'');
     return '<div class="tmpl-card'+(isActive?' is-active':'')+'">'+
       '<div class="tmpl-info">'+
-      '<div class="tmpl-name">📋 '+esc(t.filename)+
-      (isActive?'<span class="active-badge">✓ ACTIVE</span>':'')+'</div>'+
-      '<div class="tmpl-meta">'+t.field_count+' fields · '+t.modified+'</div>'+
+      '<div class="tmpl-name">'+esc(t.filename)+
+      (isActive?'<span class="active-badge">ACTIVE</span>':'')+'</div>'+
+      '<div class="tmpl-meta">'+t.field_count+' fields - '+t.modified+'</div>'+
       '<div class="tmpl-fields-preview">'+preview+'</div></div>'+
       '<div class="tmpl-actions">'+
       (isActive
@@ -1119,69 +1096,59 @@ async function loadTemplateList(activeTemplate){
       '<button class="t-btn del" onclick="deleteTemplate(\''+esc(t.filename)+'\')">Delete</button>'+
       '</div></div>';
   }).join('');
-  var active=templates.find(t=>t.is_active||(t.filename===activeTemplate));
-  if(active){
-    st.style.color='var(--pass)';
-    st.textContent='✓ Active template: '+active.filename+' — validating '+active.field_count+' fields.';
-  }else{
-    st.style.color='var(--muted)';
-    st.textContent='No template active — validating all fields (or manual selection).';
-  }
+  var active=templates.filter(function(t){return t.is_active||(t.filename===activeTemplate);})[0];
+  if(active){st.style.color='var(--pass)';st.textContent='Active: '+active.filename+' ('+active.field_count+' fields)';}
+  else{st.style.color='var(--muted)';st.textContent='No template active - validating all fields.';}
 }
 
 async function uploadTemplate(input){
   if(!input.files||!input.files.length) return;
   var st=document.getElementById('tmpl-st');
-  st.style.color='var(--muted)';st.textContent='Uploading…';
+  st.style.color='var(--muted)';st.textContent='Uploading...';
   var fd=new FormData();fd.append('file',input.files[0]);
   try{
     var res=await fetch('/api/templates/upload',{method:'POST',body:fd});
     var data=await res.json();
     if(data.ok){
       st.style.color='var(--pass)';
-      st.textContent='✓ Uploaded: '+data.filename+' ('+data.field_count+' fields detected: '+
-        (data.fields||[]).slice(0,5).join(', ')+(data.field_count>5?' …':'')+'). Click Activate to use it.';
+      st.textContent='Uploaded: '+data.filename+' ('+data.field_count+' fields). Click Activate to use it.';
       toast('Template uploaded: '+data.filename+' ('+data.field_count+' fields)','success');
-      var cfg=await fetch('/api/config').then(r=>r.json());
+      var cfg=await fetch('/api/config').then(function(r){return r.json();});
       await loadTemplateList(cfg.active_template||'');
-    }else{
-      st.style.color='var(--fail)';
-      st.textContent='✗ '+（data.error||'Upload failed');
-    }
+    }else{st.style.color='var(--fail)';st.textContent=data.error||'Upload failed';}
   }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
   input.value='';
 }
 
 async function activateTemplate(filename){
   var st=document.getElementById('tmpl-st');
-  st.style.color='var(--muted)';st.textContent='Activating…';
+  st.style.color='var(--muted)';st.textContent='Activating...';
   try{
     var res=await fetch('/api/templates/activate',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:filename})});
     var data=await res.json();
     if(data.ok){
-      st.style.color='var(--pass)';
-      st.textContent='✓ Activated: '+filename+' ('+data.field_count+' fields) — re-validating all tables…';
-      toast('Template activated: '+filename+' ('+data.field_count+' fields)','success');
+      st.style.color='var(--pass)';st.textContent='Activated: '+filename+' ('+data.field_count+' fields) - re-validating...';
+      toast('Template activated: '+filename,'success');
       await loadTemplateList(filename);
-      setTimeout(()=>refresh(),1500);
-    }else{st.style.color='var(--fail)';st.textContent='✗ '+(data.error||'Failed');}
+      setTimeout(function(){refresh();},1500);
+    }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
   }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
 }
 
 async function deactivateTemplate(){
   var st=document.getElementById('tmpl-st');
-  st.style.color='var(--muted)';st.textContent='Deactivating…';
+  st.style.color='var(--muted)';st.textContent='Deactivating...';
   try{
     var res=await fetch('/api/templates/activate',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:''})});
     var data=await res.json();
     if(data.ok){
-      st.style.color='var(--pass)';st.textContent='Template deactivated — validating all fields.';
+      st.style.color='var(--pass)';st.textContent='Template deactivated - validating all fields.';
       toast('Template deactivated','info');
       await loadTemplateList('');
-      setTimeout(()=>refresh(),1500);
-    }else{st.style.color='var(--fail)';st.textContent='✗ '+(data.error||'Failed');}
+      setTimeout(function(){refresh();},1500);
+    }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
   }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
 }
 
@@ -1193,36 +1160,15 @@ async function deleteTemplate(filename){
     var data=await res.json();
     if(data.ok){
       st.style.color='var(--pass)';st.textContent='Template deleted.';
-      toast('Template deleted: '+filename,'info');
-      var cfg=await fetch('/api/config').then(r=>r.json());
+      toast('Deleted: '+filename,'info');
+      var cfg=await fetch('/api/config').then(function(r){return r.json();});
       await loadTemplateList(cfg.active_template||'');
-      setTimeout(()=>refresh(),800);
-    }else{st.style.color='var(--fail)';st.textContent='✗ '+(data.error||'Failed');}
+      setTimeout(function(){refresh();},800);
+    }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
   }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
 }
 
-// ── Field selection ───────────────────────────────────────────────────────────
-    if(previewedFiles.tgt){
-      var fd2=new FormData();fd2.append('file',previewedFiles.tgt);
-      var r2=await fetch('/api/upload/target',{method:'POST',body:fd2});
-      var d2=await r2.json();
-      if(d2.ok){var c2=await fetch('/api/config').then(r=>r.json());tgtPath=c2.target_dir+'/'+previewedFiles.tgt.name;}
-    }
-  }catch(e){}
-  try{
-    var res=await fetch('/api/fields/preview',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({source_path:srcPath,target_path:tgtPath})});
-    var data=await res.json();
-    if(data.errors&&Object.keys(data.errors).length){
-      st.style.color='var(--fail)';st.textContent=Object.values(data.errors).join(' | ');return;
-    }
-    renderFieldCheckboxes(data.fields,data);
-    st.style.color='var(--pass)';
-    st.textContent=data.common+' common'+(data.src_only?', '+data.src_only+' src-only':'')+
-      (data.tgt_only?', '+data.tgt_only+' tgt-only':'')+' fields loaded.';
-  }catch(e){st.style.color='var(--fail)';st.textContent='Failed: '+e;}
-}
+// Field selection checkboxes
 function renderFieldCheckboxes(fields,summary){
   var grid=document.getElementById('field-checkboxes');
   var bar=document.getElementById('fs-filter-bar');
@@ -1235,7 +1181,7 @@ function renderFieldCheckboxes(fields,summary){
   if(!fields||!fields.length){
     grid.innerHTML='<div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">No fields found.</div>';return;
   }
-  grid.innerHTML=fields.map(f=>{
+  grid.innerHTML=fields.map(function(f){
     var lbl=f.label&&f.label!==f.field?f.label:f.field;
     var tech=f.label&&f.label!==f.field?'<div class="fc-tech">'+esc(f.field)+'</div>':'';
     var canSel=f.common!==false;
@@ -1250,22 +1196,22 @@ function renderFieldCheckboxes(fields,summary){
   updateFsCount();
 }
 function setFsFilter(btn,filter){
-  document.querySelectorAll('#fs-filter-bar .fs-btn').forEach(b=>{
+  document.querySelectorAll('#fs-filter-bar .fs-btn').forEach(function(b){
     b.style.background='transparent';b.style.borderColor='var(--border)';b.style.color='var(--muted)';});
   btn.style.background='var(--accent)';btn.style.borderColor='var(--accent)';btn.style.color='#fff';
   currentFsFilter=filter;filterFieldCheckboxes();
 }
 function filterFieldCheckboxes(){
   var q=(document.getElementById('fs-search').value||'').toLowerCase();
-  document.querySelectorAll('#field-checkboxes .fc-item').forEach(item=>{
+  document.querySelectorAll('#field-checkboxes .fc-item').forEach(function(item){
     var field=item.dataset.field||'',label=item.dataset.label||'',role=item.dataset.role||'';
-    item.style.display=((currentFsFilter==='all'||currentFsFilter===role)&&(!q||field.includes(q)||label.includes(q)))?'':'none';
+    item.style.display=((currentFsFilter==='all'||currentFsFilter===role)&&(!q||field.indexOf(q)>=0||label.indexOf(q)>=0))?'':'none';
   });
 }
-function selectAllFields(){document.querySelectorAll('#field-checkboxes input:not(:disabled)').forEach(cb=>{cb.checked=true});updateFsCount();}
-function clearAllFields(){document.querySelectorAll('#field-checkboxes input:not(:disabled)').forEach(cb=>{cb.checked=false});updateFsCount();}
-function selectVisible(){document.querySelectorAll('#field-checkboxes .fc-item:not([style*="display: none"]) input:not(:disabled)').forEach(cb=>{cb.checked=true});updateFsCount();}
-function clearVisible(){document.querySelectorAll('#field-checkboxes .fc-item:not([style*="display: none"]) input:not(:disabled)').forEach(cb=>{cb.checked=false});updateFsCount();}
+function selectAllFields(){document.querySelectorAll('#field-checkboxes input:not(:disabled)').forEach(function(cb){cb.checked=true;});updateFsCount();}
+function clearAllFields(){document.querySelectorAll('#field-checkboxes input:not(:disabled)').forEach(function(cb){cb.checked=false;});updateFsCount();}
+function selectVisible(){document.querySelectorAll('#field-checkboxes .fc-item:not([style*="display: none"]) input:not(:disabled)').forEach(function(cb){cb.checked=true;});updateFsCount();}
+function clearVisible(){document.querySelectorAll('#field-checkboxes .fc-item:not([style*="display: none"]) input:not(:disabled)').forEach(function(cb){cb.checked=false;});updateFsCount();}
 function updateFsCount(){
   var en=document.querySelectorAll('#field-checkboxes input:not(:disabled)');
   var ch=document.querySelectorAll('#field-checkboxes input:not(:disabled):checked');
@@ -1274,32 +1220,31 @@ function updateFsCount(){
 }
 function updateThrDisplay(){document.getElementById('thr-display').textContent=document.getElementById('thr-slider').value+'%';}
 async function savePaths(){
-  var st=document.getElementById('path-st');st.textContent='Saving…';
+  var st=document.getElementById('path-st');st.textContent='Saving...';
   var res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({source_dir:document.getElementById('cfg-src').value,
       target_dir:document.getElementById('cfg-tgt').value})});
   var data=await res.json();
-  if(data.ok){st.style.color='var(--pass)';st.textContent='✓ Saved — rescanning…';setTimeout(refresh,800);}
+  if(data.ok){st.style.color='var(--pass)';st.textContent='Saved - rescanning...';setTimeout(refresh,800);}
   else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
 }
 async function saveThreshold(){
   var thr=parseFloat(document.getElementById('thr-slider').value);
-  var st=document.getElementById('thr-st');st.textContent='Applying…';
+  var st=document.getElementById('thr-st');st.textContent='Applying...';
   var res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({pass_threshold:thr})});
   var data=await res.json();
-  if(data.ok){st.style.color='var(--pass)';st.textContent='✓ Threshold → '+thr+'% — re-validating…';
-    toast('Threshold → '+thr+'%','info');setTimeout(refresh,800);}
+  if(data.ok){st.style.color='var(--pass)';st.textContent='Threshold set to '+thr+'% - re-validating...';
+    toast('Threshold: '+thr+'%','info');setTimeout(refresh,800);}
   else{st.style.color='var(--fail)';st.textContent='Failed';}
 }
 async function saveFieldSelection(){
   var allEn=document.querySelectorAll('#field-checkboxes input:not(:disabled)');
-  if(allEn.length===0){var st=document.getElementById('field-st');
-    st.style.color='var(--warn)';st.textContent='No fields loaded yet.';return;}
+  if(allEn.length===0){var st=document.getElementById('field-st');st.style.color='var(--warn)';st.textContent='No fields loaded yet.';return;}
   var allCh=document.querySelectorAll('#field-checkboxes input:not(:disabled):checked');
-  var selected=[];allCh.forEach(cb=>selected.push(cb.value));
+  var selected=[];allCh.forEach(function(cb){selected.push(cb.value);});
   var toSave=selected.length===allEn.length?[]:selected;
-  var st=document.getElementById('field-st');st.style.color='var(--muted)';st.textContent='Saving…';
+  var st=document.getElementById('field-st');st.style.color='var(--muted)';st.textContent='Saving...';
   try{
     var res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({selected_fields:toSave})});
@@ -1307,26 +1252,26 @@ async function saveFieldSelection(){
     if(data.ok){
       st.style.color='var(--pass)';
       var lbl=toSave.length?toSave.length+' field(s) selected':'All fields';
-      st.textContent='✓ '+lbl+' — re-validating…';toast(lbl+' applied','success');
+      st.textContent=lbl+' - re-validating...';toast(lbl+' applied','success');
       setTimeout(refresh,1200);
     }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
   }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
 }
 async function uploadLabels(input){
   if(!input.files||!input.files.length) return;
-  var st=document.getElementById('lbl-st');st.textContent='Uploading…';
+  var st=document.getElementById('lbl-st');st.textContent='Uploading...';
   var fd=new FormData();fd.append('file',input.files[0]);
   var res=await fetch('/api/upload/labels',{method:'POST',body:fd});
   var data=await res.json();
-  if(data.ok){st.style.color='var(--pass)';st.textContent='✓ Labels applied — re-validating…';
+  if(data.ok){st.style.color='var(--pass)';st.textContent='Labels applied - re-validating...';
     toast('Custom labels applied','info');setTimeout(refresh,1000);}
   else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
   input.value='';
 }
 
-// ── Utilities ─────────────────────────────────────────────────────────────────
+// Utilities
 function closeModal(id){document.getElementById(id).classList.remove('open');}
-['log-modal','rep-modal','set-modal','upload-modal','pair-modal'].forEach(id=>{
+['log-modal','rep-modal','set-modal','upload-modal','pair-modal'].forEach(function(id){
   document.getElementById(id).addEventListener('click',function(e){
     if(e.target===this) this.classList.remove('open');
   });
@@ -1337,7 +1282,7 @@ function toast(msg,lvl){
   el.className='toast '+lvl;
   el.innerHTML='<span class="toast-m">'+esc(msg)+'</span>';
   document.getElementById('toast-container').appendChild(el);
-  setTimeout(()=>{el.classList.add('rm');setTimeout(()=>el.remove(),230);},5000);
+  setTimeout(function(){el.classList.add('rm');setTimeout(function(){el.remove();},230);},5000);
 }
 function card(val,lbl,cls){return '<div class="card '+cls+'"><div class="n">'+val+'</div><div class="l">'+lbl+'</div></div>';}
 function fmt(n){return Number(n).toLocaleString();}
