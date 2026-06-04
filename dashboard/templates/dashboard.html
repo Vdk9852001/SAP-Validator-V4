@@ -543,32 +543,34 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
       <!-- ── MANUAL FIELD SELECTION ── -->
       <div class="s-section">
         <h4>☑ Manual Field Selection</h4>
-        <div class="fs-note">Alternative to templates. Load fields from actual files and tick which ones to validate.
-          <b>Note:</b> if a template is active, it overrides this selection.</div>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Load columns from files</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div class="fs-note">Pick which fields to validate from your actual uploaded files.
+          Fields are read directly from the files on the server — no scan required.
+          If a template is active, it overrides this.</div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:13px;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
+              letter-spacing:.06em;margin-bottom:10px">Select files to load fields from</div>
+          <div style="display:grid;grid-template-columns:1fr 24px 1fr;gap:8px;align-items:end;margin-bottom:10px">
             <div>
-              <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Source file</div>
-              <div style="display:flex;gap:5px">
-                <input type="text" id="prev-src" class="f-inp" style="flex:1;font-size:11px;padding:5px 8px" placeholder="Path or browse…">
-                <button class="fs-btn" onclick="document.getElementById('prev-src-file').click()">Browse</button>
-                <input type="file" id="prev-src-file" accept=".csv,.xlsx,.xls" onchange="previewFileChosen('src',this)">
-              </div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500">Source file (uploaded)</div>
+              <select id="fs-src-sel" onchange="onFsFileChanged()" style="font-size:11px;padding:6px 8px">
+                <option value="">— select source file —</option>
+              </select>
             </div>
+            <div style="font-size:14px;color:var(--muted);text-align:center;padding-bottom:6px">↔</div>
             <div>
-              <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Target file</div>
-              <div style="display:flex;gap:5px">
-                <input type="text" id="prev-tgt" class="f-inp" style="flex:1;font-size:11px;padding:5px 8px" placeholder="Path or browse…">
-                <button class="fs-btn" onclick="document.getElementById('prev-tgt-file').click()">Browse</button>
-                <input type="file" id="prev-tgt-file" accept=".csv,.xlsx,.xls" onchange="previewFileChosen('tgt',this)">
-              </div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500">Target file (uploaded)</div>
+              <select id="fs-tgt-sel" onchange="onFsFileChanged()" style="font-size:11px;padding:6px 8px">
+                <option value="">— select target file —</option>
+              </select>
             </div>
           </div>
-          <div style="display:flex;align-items:center;gap:9px">
-            <button class="save-btn" style="font-size:11px;padding:5px 13px" onclick="loadFieldsFromFiles()">Load fields</button>
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+            <button class="save-btn" style="font-size:11px;padding:5px 14px"
+                    onclick="loadFieldsFromSelected()">⚡ Load fields from these files</button>
             <span id="prev-status" style="font-size:11px;color:var(--muted)"></span>
           </div>
+          <div id="fs-file-info" style="font-size:10px;color:var(--muted);margin-top:7px;
+              line-height:1.5;display:none"></div>
         </div>
         <input type="text" id="fs-search" class="f-inp"
                style="font-size:11px;padding:6px 10px;margin-bottom:7px"
@@ -991,7 +993,7 @@ async function openReports(){
   ).join('');
 }
 
-// ── Settings ──────────────────────────────────────────────────────────────────
+// ── Settings ─────────────────────────────────────────────────────────────────────────────────
 async function openSettings(){
   document.getElementById('set-modal').classList.add('open');
   var cfg=await fetch('/api/config').then(r=>r.json());
@@ -1002,18 +1004,89 @@ async function openSettings(){
   document.getElementById('thr-display').textContent=thr+'%';
   document.getElementById('lbl-current').textContent=
     cfg.labels_file_exists?'Custom labels loaded: '+cfg.labels_file:'Using built-in SAP field dictionary.';
-  var avail=cfg.available_fields||[],sel=cfg.selected_fields||[];
+
+  // Populate file dropdowns from actual files on disk (always fresh, not from last scan)
+  var srcFiles=cfg.source_files||[], tgtFiles=cfg.target_files||[];
+  var srcSel=document.getElementById('fs-src-sel');
+  var tgtSel=document.getElementById('fs-tgt-sel');
+  srcSel.innerHTML='<option value="">— select source file —</option>'+
+    srcFiles.map(f=>'<option value="'+esc(f)+'">'+esc(f)+'</option>').join('');
+  tgtSel.innerHTML='<option value="">— select target file —</option>'+
+    tgtFiles.map(f=>'<option value="'+esc(f)+'">'+esc(f)+'</option>').join('');
+  // Auto-select if only one file per side
+  if(srcFiles.length===1) srcSel.value=srcFiles[0];
+  if(tgtFiles.length===1) tgtSel.value=tgtFiles[0];
+
+  // Show current field list (from disk-read, not last scan)
+  var sel=cfg.selected_fields||[];
+  var avail=cfg.available_fields||[];
   if(avail.length){
     var enriched=avail.map(f=>({...f,selected:sel.length===0||sel.includes(f.field)}));
     renderFieldCheckboxes(enriched,{
-      common:enriched.filter(f=>f.common).length,
-      src_only:enriched.filter(f=>f.in_source&&!f.in_target).length,
-      tgt_only:enriched.filter(f=>!f.in_source&&f.in_target).length,
+      common:   enriched.filter(f=>f.common).length,
+      src_only: enriched.filter(f=>f.in_source&&!f.in_target).length,
+      tgt_only: enriched.filter(f=>!f.in_source&&f.in_target).length,
     });
     var fst=document.getElementById('field-st');
     fst.style.color=sel.length?'var(--pass)':'var(--muted)';
     fst.textContent=sel.length?'Validating '+sel.length+' selected field(s).':'Validating all fields.';
+    var info=document.getElementById('fs-file-info');
+    if(info&&(srcFiles.length||tgtFiles.length)){
+      info.style.display='';
+      info.innerHTML='ℹ Currently showing: <b>'+(srcFiles[0]||'?')+'</b> ↔ <b>'+(tgtFiles[0]||'?')+'</b>. Select different files above and click ⚡ Load to change.';
+    }
+  }else{
+    document.getElementById('field-checkboxes').innerHTML=
+      '<div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">Select files above and click ⚡ Load fields.</div>';
   }
+  await loadTemplateList(cfg.active_template||'');
+}
+
+// Triggered when either file dropdown changes
+function onFsFileChanged(){
+  var st=document.getElementById('prev-status');
+  var srcFile=document.getElementById('fs-src-sel').value;
+  var tgtFile=document.getElementById('fs-tgt-sel').value;
+  if(srcFile||tgtFile){
+    st.style.color='var(--muted)';
+    st.textContent=(srcFile||'(none)')+' ↔ '+(tgtFile||'(none)')+' — click Load fields.';
+  }
+}
+
+// Read columns directly from uploaded files on server — instant, no scan needed
+async function loadFieldsFromSelected(){
+  var st=document.getElementById('prev-status');
+  var srcFile=document.getElementById('fs-src-sel').value;
+  var tgtFile=document.getElementById('fs-tgt-sel').value;
+  if(!srcFile&&!tgtFile){
+    st.style.color='var(--warn)';st.textContent='Select at least one file first.';return;
+  }
+  st.style.color='var(--muted)';st.textContent='Reading column headers…';
+  try{
+    var res=await fetch('/api/fields/from-files',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source_file:srcFile,target_file:tgtFile})
+    });
+    var data=await res.json();
+    if(data.errors&&Object.keys(data.errors).length&&(!data.fields||!data.fields.length)){
+      st.style.color='var(--fail)';st.textContent=Object.values(data.errors).join(' | ');return;
+    }
+    if(!data.fields||!data.fields.length){
+      st.style.color='var(--warn)';st.textContent='No columns found in selected files.';return;
+    }
+    renderFieldCheckboxes(data.fields,data);
+    st.style.color='var(--pass)';
+    st.textContent='✓ '+data.fields.length+' fields loaded — '+
+      data.common+' common'+(data.src_only?', '+data.src_only+' source-only':'')+
+      (data.tgt_only?', '+data.tgt_only+' target-only':'')+'.'
+    var info=document.getElementById('fs-file-info');
+    if(info){
+      info.style.display='';
+      info.innerHTML='Showing columns from: <b>'+(srcFile||'none')+'</b> ↔ <b>'+(tgtFile||'none')+'</b>';
+    }
+  }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
+}
   await loadTemplateList(cfg.active_template||'');
 }
 
@@ -1129,25 +1202,6 @@ async function deleteTemplate(filename){
 }
 
 // ── Field selection ───────────────────────────────────────────────────────────
-function previewFileChosen(side,input){
-  if(!input.files||!input.files.length) return;
-  previewedFiles[side]=input.files[0];
-  document.getElementById('prev-'+side).value=input.files[0].name;
-  input.value='';
-}
-async function loadFieldsFromFiles(){
-  var st=document.getElementById('prev-status');
-  var srcPath=document.getElementById('prev-src').value.trim();
-  var tgtPath=document.getElementById('prev-tgt').value.trim();
-  if(!srcPath&&!tgtPath){st.style.color='var(--fail)';st.textContent='Enter at least one file path.';return;}
-  st.style.color='var(--muted)';st.textContent='Reading headers…';
-  try{
-    if(previewedFiles.src){
-      var fd=new FormData();fd.append('file',previewedFiles.src);
-      var r=await fetch('/api/upload/source',{method:'POST',body:fd});
-      var d=await r.json();
-      if(d.ok){var c=await fetch('/api/config').then(r=>r.json());srcPath=c.source_dir+'/'+previewedFiles.src.name;}
-    }
     if(previewedFiles.tgt){
       var fd2=new FormData();fd2.append('file',previewedFiles.tgt);
       var r2=await fetch('/api/upload/target',{method:'POST',body:fd2});
