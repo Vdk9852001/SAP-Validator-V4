@@ -7,69 +7,51 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#f4f6fa;
-  --surface:#ffffff;
-  --surface2:#f0f2f7;
-  --border:#dde1ec;
-  --border2:#c8cde0;
-  --text:#1a1f36;
-  --muted:#6b728e;
-  --pass:#16a34a;
-  --pass-bg:#dcfce7;
-  --fail:#dc2626;
-  --fail-bg:#fee2e2;
-  --warn:#d97706;
-  --warn-bg:#fef3c7;
-  --info:#2563eb;
-  --info-bg:#dbeafe;
-  --accent:#4f46e5;
-  --accent-light:#eef2ff;
-  --accent-mid:rgba(79,70,229,.12);
-  --shadow:0 1px 4px rgba(0,0,0,.08);
-  --shadow-md:0 4px 16px rgba(0,0,0,.1);
+  --bg:#f4f6fa;--surface:#fff;--surface2:#f0f2f7;
+  --border:#dde1ec;--border2:#c8cde0;--text:#1a1f36;--muted:#6b728e;
+  --pass:#16a34a;--pass-bg:#dcfce7;--fail:#dc2626;--fail-bg:#fee2e2;
+  --warn:#d97706;--warn-bg:#fef3c7;--info:#2563eb;--info-bg:#dbeafe;
+  --accent:#4f46e5;--accent-light:#eef2ff;--accent-mid:rgba(79,70,229,.12);
+  --shadow:0 1px 4px rgba(0,0,0,.08);--shadow-md:0 4px 16px rgba(0,0,0,.1);
 }
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px}
-/* ── Header ── */
 header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;
-  display:flex;align-items:center;justify-content:space-between;height:54px;gap:10px;
-  box-shadow:var(--shadow)}
+  display:flex;align-items:center;justify-content:space-between;height:54px;gap:10px;box-shadow:var(--shadow)}
 .logo{display:flex;align-items:center;gap:10px}
-.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,#4f46e5,#7c3aed);
-  border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#4f46e5,#7c3aed);
+  border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .logo-icon svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2}
 .logo-text{font-size:15px;font-weight:700;color:var(--text)}
 .logo-text span{color:var(--accent)}
-.logo-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.logo-sub{font-size:10px;color:var(--muted);margin-top:1px}
 .hdr-r{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-.hbtn{border:none;padding:6px 14px;border-radius:7px;font-size:12px;cursor:pointer;
-  font-weight:500;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.hbtn{border:none;padding:6px 14px;border-radius:7px;font-size:12px;cursor:pointer;font-weight:500;
+  transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:5px}
 .hbtn-accent{background:var(--accent);color:#fff;box-shadow:0 2px 6px rgba(79,70,229,.3)}
 .hbtn-accent:hover:not(:disabled){background:#4338ca}
 .hbtn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
-.hbtn-ghost:hover:not(:disabled){background:var(--border);border-color:var(--border2)}
+.hbtn-ghost:hover:not(:disabled){background:var(--border)}
 .hbtn:disabled{opacity:.4;cursor:default}
 .last-scan{font-size:11px;color:var(--muted)}
 .thr-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;
   background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.2)}
-/* ── Layout ── */
-.layout{display:grid;grid-template-columns:268px 1fr;height:calc(100vh - 54px)}
-/* ── Sidebar ── */
-aside{background:var(--surface);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;overflow:hidden}
-.sb-head{padding:14px 15px 6px;font-size:10px;font-weight:700;color:var(--muted);
-  letter-spacing:.08em;text-transform:uppercase}
+.tmpl-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;
+  background:var(--pass-bg);color:var(--pass);border:1px solid rgba(22,163,74,.3)}
+.layout{display:grid;grid-template-columns:270px 1fr;height:calc(100vh - 54px)}
+aside{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sb-head{padding:14px 15px 6px;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
 #table-list{flex:1;overflow-y:auto}
 .sb-item{display:flex;align-items:center;padding:9px 15px;cursor:pointer;
   border-left:3px solid transparent;transition:all .13s;gap:8px}
 .sb-item:hover{background:var(--surface2)}
 .sb-item.active{background:var(--accent-light);border-left-color:var(--accent)}
-.tname{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
-.tsub{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;
-  justify-content:center;flex-shrink:0;font-size:13px}
+.sb-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0;font-size:14px}
 .sb-icon-tbl{background:var(--accent-light);color:var(--accent)}
 .sb-icon-warn{background:var(--warn-bg);color:var(--warn)}
-.sp{font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;flex-shrink:0}
+.tname{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.tsub{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;flex-shrink:0}
 .sp-new{background:var(--info-bg);color:var(--info)}
 .sp-val{background:var(--accent-light);color:var(--accent);animation:blink .8s infinite}
 .sp-pass{background:var(--pass-bg);color:var(--pass)}
@@ -83,7 +65,6 @@ aside{background:var(--surface);border-right:1px solid var(--border);
 .ub{flex:1;font-size:11px;padding:6px 4px;border:1px solid var(--border);border-radius:7px;
   background:transparent;color:var(--muted);text-align:center;cursor:pointer;transition:all .13s;font-weight:500}
 .ub:hover{background:var(--accent-light);color:var(--accent);border-color:rgba(79,70,229,.3)}
-/* ── Main ── */
 main{overflow-y:auto;padding:22px}
 #welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;
   height:100%;gap:20px;text-align:center}
@@ -91,20 +72,17 @@ main{overflow-y:auto;padding:22px}
 #welcome h2 span{color:var(--accent)}
 #welcome p{color:var(--muted);font-size:13px;max-width:520px;line-height:1.7}
 .upload-zone{background:var(--surface);border:1px solid var(--border);border-radius:12px;
-  padding:22px;display:grid;grid-template-columns:1fr 1fr;gap:14px;min-width:480px;
-  box-shadow:var(--shadow)}
+  padding:22px;display:grid;grid-template-columns:1fr 1fr;gap:14px;min-width:480px;box-shadow:var(--shadow)}
 .upload-box{background:var(--surface2);border:2px dashed var(--border);border-radius:10px;
   padding:18px;text-align:center;transition:border-color .15s}
 .upload-box:hover{border-color:var(--accent)}
 .upload-box h4{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
-  letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:5px}
-.ubtn{display:inline-block;background:var(--accent);color:#fff;border:none;padding:8px 16px;
-  border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;width:100%;margin-bottom:7px;
-  transition:background .15s}
+  letter-spacing:.06em;margin-bottom:10px}
+.ubtn{display:block;background:var(--accent);color:#fff;border:none;padding:8px 16px;
+  border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;width:100%;margin-bottom:7px}
 .ubtn:hover{background:#4338ca}
 .uhint{font-size:10px;color:var(--muted);line-height:1.5}
 .ustatus{font-size:11px;margin-top:5px;min-height:15px}
-/* ── Detail ── */
 #detail{display:none}
 .det-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;gap:12px}
 .det-title{font-size:18px;font-weight:700}
@@ -120,13 +98,12 @@ main{overflow-y:auto;padding:22px}
   display:inline-flex;align-items:center;gap:5px;transition:background .15s}
 .dl-btn:hover{background:rgba(79,70,229,.18)}
 .dl-btn.disabled{opacity:.4;pointer-events:none}
-.thr-info{display:inline-flex;align-items:center;gap:7px;background:var(--accent-light);
+.info-bar{display:inline-flex;align-items:center;gap:7px;background:var(--accent-light);
   border:1px solid rgba(79,70,229,.2);border-radius:7px;padding:5px 12px;
-  font-size:11px;color:var(--accent);margin-bottom:14px;font-weight:500}
-/* Template active banner */
-.tmpl-active{display:inline-flex;align-items:center;gap:7px;background:#f0fdf4;
-  border:1px solid #bbf7d0;border-radius:7px;padding:5px 12px;font-size:11px;
-  color:var(--pass);margin-bottom:14px;font-weight:500}
+  font-size:11px;color:var(--accent);margin-bottom:10px;font-weight:500}
+.tmpl-bar{display:inline-flex;align-items:center;gap:7px;background:var(--pass-bg);
+  border:1px solid rgba(22,163,74,.25);border-radius:7px;padding:5px 12px;
+  font-size:11px;color:var(--pass);margin-bottom:10px;font-weight:500;margin-left:8px}
 .banner{display:flex;align-items:flex-start;gap:9px;padding:10px 14px;border-radius:8px;
   margin-bottom:12px;font-size:12px;line-height:1.55}
 .bn-val{background:var(--accent-light);border:1px solid rgba(79,70,229,.2);color:var(--accent)}
@@ -136,7 +113,6 @@ main{overflow-y:auto;padding:22px}
 .spinner{width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;
   border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;margin-top:1px}
 @keyframes spin{to{transform:rotate(360deg)}}
-/* ── Cards ── */
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:20px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
   padding:13px 14px;box-shadow:var(--shadow)}
@@ -145,11 +121,9 @@ main{overflow-y:auto;padding:22px}
 .card.ok .n{color:var(--pass)}
 .card.warn .n{color:var(--fail)}
 .card.blue .n{color:var(--info)}
-/* ── Section header ── */
 .sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
   letter-spacing:.07em;margin:20px 0 10px;display:flex;align-items:center;gap:7px}
 .sec::after{content:'';flex:1;height:1px;background:var(--border)}
-/* ── Table ── */
 .tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;
   overflow:hidden;margin-bottom:22px;box-shadow:var(--shadow)}
 table{width:100%;border-collapse:collapse;font-size:12px}
@@ -165,18 +139,17 @@ tr.data-row:hover td{background:var(--surface2)}
 .ts{font-size:10px;color:var(--muted)}
 .bar-w{display:flex;align-items:center;gap:7px}
 .bar-bg{height:5px;border-radius:3px;background:var(--border);flex:1}
-.bar-f{height:100%;border-radius:3px;transition:width .3s}
+.bar-f{height:100%;border-radius:3px}
 .bar-v{font-size:11px;font-weight:700;min-width:38px;text-align:right}
 .bdg{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
 .b-pass{background:var(--pass-bg);color:var(--pass)}
 .b-fail{background:var(--fail-bg);color:var(--fail)}
-/* ── Mismatch expand ── */
 .exp-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;
   cursor:pointer;padding:3px 9px;border-radius:6px;transition:all .15s;
   display:inline-flex;align-items:center;gap:4px;font-weight:500}
-.exp-btn:hover{background:var(--fail-bg);color:var(--fail);border-color:rgba(220,38,38,.3)}
-.exp-btn .arr{display:inline-block;transition:transform .18s;font-style:normal;font-size:9px}
-.exp-btn.open{background:var(--fail-bg);color:var(--fail);border-color:rgba(220,38,38,.3)}
+.exp-btn:hover,.exp-btn.open{background:var(--fail-bg);color:var(--fail);
+  border-color:rgba(220,38,38,.3)}
+.exp-btn .arr{display:inline-block;transition:transform .18s;font-size:9px}
 .exp-btn.open .arr{transform:rotate(90deg)}
 .miss-row{display:none}
 .miss-row.open{display:table-row}
@@ -189,7 +162,6 @@ tr.data-row:hover td{background:var(--surface2)}
 .dnew{color:var(--pass);font-weight:600}
 .more-note{font-size:10px;color:var(--muted);padding:6px 10px;
   background:var(--surface2);border-top:1px solid var(--border)}
-/* ── Mapping panel ── */
 .map-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
 .map-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;
   padding:12px 14px;box-shadow:var(--shadow)}
@@ -202,10 +174,8 @@ tr.data-row:hover td{background:var(--surface2)}
 .mtag.num{border-color:rgba(37,99,235,.3);background:var(--info-bg);color:var(--info)}
 .mtag.w{border-color:rgba(217,119,6,.3);background:var(--warn-bg);color:var(--warn)}
 .mtag.cross{border-color:rgba(79,70,229,.3);background:var(--accent-light);color:var(--accent)}
-.mtag.cross small{color:var(--accent);opacity:.8}
 .err-box{background:var(--fail-bg);border:1px solid rgba(220,38,38,.3);border-radius:9px;
   padding:11px 14px;color:var(--fail);font-size:12px;margin-bottom:16px}
-/* ── Toast ── */
 #toast-container{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column-reverse;gap:8px;z-index:999}
 .toast{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 16px;
   font-size:12px;max-width:320px;box-shadow:var(--shadow-md);display:flex;align-items:flex-start;
@@ -218,7 +188,6 @@ tr.data-row:hover td{background:var(--surface2)}
 .toast.error{border-left:3px solid var(--fail)}
 @keyframes sli{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
 @keyframes slo{to{opacity:0;transform:translateX(16px)}}
-/* ── Modal ── */
 .overlay{position:fixed;inset:0;background:rgba(15,20,40,.45);display:none;
   align-items:center;justify-content:center;z-index:200}
 .overlay.open{display:flex}
@@ -226,12 +195,11 @@ tr.data-row:hover td{background:var(--surface2)}
   max-height:87vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-md)}
 .modal-hd{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;
   align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surface2)}
-.modal-hd h3{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px}
+.modal-hd h3{font-size:14px;font-weight:700}
 .mclose{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;
   line-height:1;padding:0 3px;border-radius:5px;transition:all .13s}
 .mclose:hover{background:var(--border);color:var(--text)}
 .modal-body{overflow-y:auto;padding:18px 20px;flex:1}
-/* ── Log ── */
 .le{display:flex;gap:9px;padding:7px 10px;border-radius:7px;font-size:11px;
   margin-bottom:4px;border-left:3px solid transparent}
 .le.info{border-color:var(--info);background:var(--info-bg)}
@@ -240,18 +208,16 @@ tr.data-row:hover td{background:var(--surface2)}
 .le.error{border-color:var(--fail);background:var(--fail-bg)}
 .le-ts{color:var(--muted);flex-shrink:0;font-family:monospace;font-size:10px;padding-top:1px}
 .le-m{flex:1;line-height:1.45}
-/* ── Reports ── */
 .rep-row{display:flex;align-items:center;padding:9px 12px;border-radius:8px;margin-bottom:5px;
   background:var(--surface2);font-size:12px;gap:10px;border:1px solid var(--border)}
 .rep-nm{font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rep-mt{font-size:10px;color:var(--muted);white-space:nowrap}
 .rep-dl{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.25);
-  padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;transition:background .13s}
+  padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none}
 .rep-dl:hover{background:rgba(79,70,229,.2)}
-/* ── Settings ── */
 .s-section{margin-bottom:20px}
 .s-section h4{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
-  letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  letter-spacing:.06em;margin-bottom:10px}
 .f-row{display:flex;flex-direction:column;gap:4px;margin-bottom:11px}
 .f-row label{font-size:11px;color:var(--muted);font-weight:500}
 .f-inp{background:var(--surface2);border:1px solid var(--border);color:var(--text);
@@ -264,25 +230,27 @@ tr.data-row:hover td{background:var(--surface2)}
 .save-btn{background:var(--accent);color:#fff;border:none;padding:7px 18px;border-radius:7px;
   font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
 .save-btn:hover{background:#4338ca}
-.s-status{font-size:11px;margin-top:6px;min-height:16px}
+.s-status{font-size:11px;margin-top:7px;min-height:16px;line-height:1.5}
 .divider{border:none;border-top:1px solid var(--border);margin:18px 0}
-/* ── Template panel ── */
+/* Template cards */
 .tmpl-card{background:var(--surface2);border:1px solid var(--border);border-radius:9px;
   padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
-.tmpl-card.active{background:var(--pass-bg);border-color:rgba(22,163,74,.3)}
-.tmpl-card-info{flex:1;min-width:0}
-.tmpl-card-name{font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px}
-.tmpl-card-meta{font-size:10px;color:var(--muted);margin-top:2px}
-.tmpl-active-badge{background:var(--pass-bg);color:var(--pass);font-size:10px;
-  font-weight:700;padding:1px 8px;border-radius:20px;border:1px solid rgba(22,163,74,.3)}
-.tmpl-btn{font-size:11px;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:500;
+.tmpl-card.is-active{background:#f0fdf4;border-color:rgba(22,163,74,.3)}
+.tmpl-info{flex:1;min-width:0}
+.tmpl-name{font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tmpl-meta{font-size:10px;color:var(--muted);margin-top:3px}
+.tmpl-fields-preview{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.5}
+.active-badge{background:var(--pass-bg);color:var(--pass);font-size:10px;font-weight:700;
+  padding:1px 8px;border-radius:20px;border:1px solid rgba(22,163,74,.3)}
+.tmpl-actions{display:flex;gap:6px;flex-shrink:0}
+.t-btn{font-size:11px;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;
   border:1px solid var(--border);background:var(--surface);color:var(--muted);transition:all .13s}
-.tmpl-btn:hover{background:var(--surface2)}
-.tmpl-btn.activate{background:var(--accent);color:#fff;border-color:var(--accent)}
-.tmpl-btn.activate:hover{background:#4338ca}
-.tmpl-btn.deactivate{background:var(--warn-bg);color:var(--warn);border-color:rgba(217,119,6,.3)}
-.tmpl-btn.del{background:var(--fail-bg);color:var(--fail);border-color:rgba(220,38,38,.3)}
-/* ── Field selector ── */
+.t-btn:hover{background:var(--surface2)}
+.t-btn.activate{background:var(--accent);color:#fff;border-color:var(--accent)}
+.t-btn.activate:hover{background:#4338ca}
+.t-btn.deactivate{background:var(--warn-bg);color:var(--warn);border-color:rgba(217,119,6,.3)}
+.t-btn.del{background:var(--fail-bg);color:var(--fail);border-color:rgba(220,38,38,.3)}
+/* Field selector */
 .fs-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px}
 .fs-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .fs-btns{display:flex;gap:5px;flex-wrap:wrap}
@@ -295,8 +263,8 @@ tr.data-row:hover td{background:var(--surface2)}
 .fc-item{display:flex;align-items:flex-start;gap:7px;padding:5px 7px;border-radius:5px;
   cursor:pointer;transition:background .12s}
 .fc-item:hover{background:var(--border)}
-.fc-item input[type=checkbox]{accent-color:var(--accent);cursor:pointer;
-  width:13px;height:13px;margin-top:2px;flex-shrink:0}
+.fc-item input[type=checkbox]{accent-color:var(--accent);cursor:pointer;width:13px;height:13px;
+  margin-top:2px;flex-shrink:0}
 .fc-label{font-size:11px;color:var(--text);flex:1;line-height:1.3;font-weight:500}
 .fc-tech{font-size:9px;color:var(--muted)}
 .lbl-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
@@ -319,7 +287,6 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 </style>
 </head>
 <body>
@@ -327,8 +294,11 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
 <header>
   <div class="logo">
     <div class="logo-icon">
-      <!-- Custom migration/database icon -->
-      <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v4c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 10v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/><path d="M4 14v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/></svg>
+      <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/>
+        <path d="M4 6v4c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/>
+        <path d="M4 10v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/>
+        <path d="M4 14v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/>
+      </svg>
     </div>
     <div>
       <div class="logo-text">Genpact <span>SAP</span> Validator</div>
@@ -339,21 +309,30 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
     <span id="scan-ind" style="display:none"><span class="scanning-dot"></span></span>
     <span class="last-scan" id="last-scan">Not scanned yet</span>
     <span class="thr-badge" id="thr-badge">Threshold: 100%</span>
+    <span class="tmpl-badge" id="tmpl-badge" style="display:none">📋 Template active</span>
     <button class="hbtn hbtn-ghost" onclick="openLog()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      Log
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>Log
     </button>
     <button class="hbtn hbtn-ghost" onclick="openReports()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Reports
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>Reports
     </button>
     <button class="hbtn hbtn-ghost" onclick="openSettings()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M16.95 16.95l1.41 1.41M4.93 4.93l1.41 1.41M7.05 16.95l-1.41 1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/></svg>
-      Settings
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.07 4.93l-1.41 1.41M16.95 16.95l1.41 1.41M4.93 4.93l1.41 1.41M7.05 16.95l-1.41 1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/>
+      </svg>Settings
     </button>
     <button class="hbtn hbtn-accent" id="scan-btn" onclick="triggerScan()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-      Scan Now
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="23 4 23 10 17 10"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>Scan Now
     </button>
   </div>
 </header>
@@ -373,9 +352,8 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
     <div id="welcome">
       <h2>Genpact <span>SAP</span> Validator</h2>
       <p>Upload source and target files to begin validation.
-         Use <b>Pairs</b> to link files with different names
-         (e.g. <code>customers.csv</code> ↔ <code>Export_Data.csv</code>).
-         Upload a <b>field template</b> in Settings to control exactly which fields are checked.</p>
+         Use <b>Settings → Field Templates</b> to upload a CSV listing exactly
+         which fields to check. Use <b>Pairs</b> to link files with different names.</p>
       <div class="upload-zone">
         <div class="upload-box">
           <h4>⬆ Source files</h4>
@@ -390,10 +368,9 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
           <div class="ustatus" id="tgt-st"></div>
         </div>
       </div>
-      <button class="save-btn" style="font-size:12px;padding:8px 22px;background:var(--surface2);
-          color:var(--accent);border:1px solid rgba(79,70,229,.3)" onclick="openPairManager()">
-        ⇌ Manage file pairs
-      </button>
+      <button class="save-btn" style="background:var(--surface2);color:var(--accent);
+          border:1px solid rgba(79,70,229,.3);font-size:12px;padding:8px 22px"
+          onclick="openPairManager()">⇌ Manage file pairs</button>
     </div>
     <div id="detail"></div>
   </main>
@@ -401,7 +378,7 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
 
 <div id="toast-container"></div>
 
-<!-- ── Upload modal ────────────────────────────────────────────────────────── -->
+<!-- Upload modal -->
 <div class="overlay" id="upload-modal">
   <div class="modal" style="width:490px">
     <div class="modal-hd">
@@ -410,7 +387,8 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
     </div>
     <div class="modal-body">
       <div style="background:var(--accent-light);border:1px solid rgba(79,70,229,.2);
-          border-radius:9px;padding:11px 13px;margin-bottom:14px;font-size:12px;color:var(--accent);line-height:1.7">
+          border-radius:9px;padding:11px 13px;margin-bottom:14px;font-size:12px;
+          color:var(--accent);line-height:1.7">
         <b>Pairing rules</b><br>
         Files with the <b>same filename</b> pair automatically.<br>
         Different names? Use the <b>Pairs</b> button after uploading.
@@ -425,16 +403,14 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
             letter-spacing:.06em;margin-bottom:8px">Selected files</div>
         <div id="upload-queue-rows"></div>
-        <button class="save-btn" style="width:100%;margin-top:10px" onclick="confirmUpload()">
-          Upload all
-        </button>
+        <button class="save-btn" style="width:100%;margin-top:10px" onclick="confirmUpload()">Upload all</button>
         <div class="s-status" id="upload-status"></div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ── Pair manager modal ─────────────────────────────────────────────────── -->
+<!-- Pair manager -->
 <div class="overlay" id="pair-modal">
   <div class="modal" style="width:620px">
     <div class="modal-hd">
@@ -443,7 +419,7 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
     </div>
     <div class="modal-body">
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
-        Link source and target files that have different names.
+        Link source and target files with different names.
         The <b>pair name</b> is the SAP object type — it enables alias mapping
         (e.g. <code>CUSTOMER</code> maps NAME1→NAMORG1 automatically).
       </div>
@@ -480,68 +456,62 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
   </div>
 </div>
 
-<!-- ── Activity log ───────────────────────────────────────────────────────── -->
+<!-- Activity log -->
 <div class="overlay" id="log-modal">
   <div class="modal">
-    <div class="modal-hd">
-      <h3>Activity Log</h3>
-      <button class="mclose" onclick="closeModal('log-modal')">&times;</button>
-    </div>
+    <div class="modal-hd"><h3>Activity Log</h3>
+      <button class="mclose" onclick="closeModal('log-modal')">&times;</button></div>
     <div class="modal-body" id="log-list"><div class="empty-msg">No activity yet.</div></div>
   </div>
 </div>
 
-<!-- ── Excel reports ──────────────────────────────────────────────────────── -->
+<!-- Reports -->
 <div class="overlay" id="rep-modal">
   <div class="modal">
-    <div class="modal-hd">
-      <h3>Excel Reports</h3>
-      <button class="mclose" onclick="closeModal('rep-modal')">&times;</button>
-    </div>
+    <div class="modal-hd"><h3>Excel Reports</h3>
+      <button class="mclose" onclick="closeModal('rep-modal')">&times;</button></div>
     <div class="modal-body" id="rep-list"><div class="empty-msg">Loading…</div></div>
   </div>
 </div>
 
-<!-- ── Settings ──────────────────────────────────────────────────────────── -->
+<!-- Settings -->
 <div class="overlay" id="set-modal">
-  <div class="modal" style="width:680px">
-    <div class="modal-hd">
-      <h3>Settings</h3>
-      <button class="mclose" onclick="closeModal('set-modal')">&times;</button>
-    </div>
+  <div class="modal" style="width:700px">
+    <div class="modal-hd"><h3>Settings</h3>
+      <button class="mclose" onclick="closeModal('set-modal')">&times;</button></div>
     <div class="modal-body">
 
-      <!-- Field Templates -->
+      <!-- ── FIELD TEMPLATES ── -->
       <div class="s-section">
         <h4>📋 Field Selection Templates</h4>
-        <div style="background:var(--accent-light);border:1px solid rgba(79,70,229,.2);border-radius:9px;
-            padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--accent);line-height:1.7">
-          <b>What is a template?</b><br>
-          A template is a simple file listing SAP field names to validate — one per line.
-          Upload it once, activate it, and every validation run will only check those fields.
-          Supports <code>CSV</code>, <code>XLSX</code>, or <code>TXT</code> format.
+        <div style="background:var(--accent-light);border:1px solid rgba(79,70,229,.2);
+            border-radius:9px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:var(--accent);line-height:1.7">
+          <b>How it works:</b> Upload a CSV, XLSX or TXT file with one SAP field name per row.
+          Activate it and <b>every validation will only check those fields</b> — across all tables.<br>
+          Templates work with either SAP 4.7 names (<code>LAND1</code>) or S/4HANA names
+          (<code>COUNTRY</code>) — both are recognised automatically.
         </div>
-        <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap">
           <button class="save-btn" style="font-size:11px;padding:6px 14px"
-                  onclick="document.getElementById('tmpl-input').click()">
+                  onclick="document.getElementById('tmpl-file-input').click()">
             ⬆ Upload template
           </button>
-          <input type="file" id="tmpl-input" accept=".csv,.xlsx,.xls,.txt" onchange="uploadTemplate(this)">
+          <input type="file" id="tmpl-file-input" accept=".csv,.xlsx,.xls,.txt"
+                 onchange="uploadTemplate(this)">
           <a class="samp-dl" href="/api/templates/sample" download="sample_field_template.csv">
-            ↓ Download sample
+            ↓ Download sample CSV
           </a>
-          <span style="font-size:11px;color:var(--muted)">CSV/XLSX/TXT · one field name per row</span>
+          <span style="font-size:10px;color:var(--muted)">CSV / XLSX / TXT · one field name per row</span>
         </div>
         <div id="template-list">
-          <div style="font-size:12px;color:var(--muted);padding:8px 0">Loading templates…</div>
+          <div style="font-size:12px;color:var(--muted);padding:8px 0">Loading…</div>
         </div>
         <div class="s-status" id="tmpl-st"></div>
-        <div id="tmpl-active-info" style="font-size:11px;color:var(--pass);margin-top:6px;font-weight:500"></div>
       </div>
 
       <hr class="divider">
 
-      <!-- Folder paths -->
+      <!-- ── FOLDER PATHS ── -->
       <div class="s-section">
         <h4>📁 Watched Folder Paths</h4>
         <div class="f-row"><label>Source folder</label>
@@ -554,10 +524,10 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
 
       <hr class="divider">
 
-      <!-- Pass threshold -->
+      <!-- ── PASS THRESHOLD ── -->
       <div class="s-section">
         <h4>✅ Pass Threshold</h4>
-        <div class="thr-note">A field is PASS when match % ≥ this value. 100% = exact. 90% allows 10% variance.</div>
+        <div class="thr-note">A field is PASS when match % ≥ this value. 100% = exact match only. 90% allows 10% variance.</div>
         <div class="thr-row">
           <span style="font-size:12px;color:var(--muted)">50%</span>
           <input type="range" id="thr-slider" min="50" max="100" step="1" value="100" oninput="updateThrDisplay()">
@@ -570,13 +540,13 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
 
       <hr class="divider">
 
-      <!-- Manual field selection -->
+      <!-- ── MANUAL FIELD SELECTION ── -->
       <div class="s-section">
         <h4>☑ Manual Field Selection</h4>
-        <div class="fs-note">Alternative to templates — manually pick fields from a file's actual columns.
-          <b>Note:</b> if a template is active, it takes priority over this selection.</div>
+        <div class="fs-note">Alternative to templates. Load fields from actual files and tick which ones to validate.
+          <b>Note:</b> if a template is active, it overrides this selection.</div>
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Load fields from actual files</div>
+          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Load columns from files</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
             <div>
               <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Source file</div>
@@ -624,10 +594,10 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
 
       <hr class="divider">
 
-      <!-- Custom labels -->
+      <!-- ── CUSTOM LABELS ── -->
       <div class="s-section">
         <h4>🏷 Custom Field Labels</h4>
-        <div class="thr-note">Override any SAP field name with a friendlier label. Format: <code>FIELD_NAME,YOUR_LABEL</code></div>
+        <div class="thr-note">Override any SAP field name. Format: <code>FIELD_NAME,YOUR_LABEL</code></div>
         <div class="lbl-row">
           <button class="lbl-btn" onclick="document.getElementById('lbl-input').click()">Upload label CSV</button>
           <input type="file" id="lbl-input" accept=".csv" onchange="uploadLabels(this)">
@@ -642,13 +612,11 @@ code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px
 </div>
 
 <script>
-// ─── Globals ──────────────────────────────────────────────────────────────────
-var activeTable=null, allResults={}, allStates={}, lastLogCount=0;
-var uploadSide='source', uploadFileQueue=[];
+var activeTable=null,allResults={},allStates={},lastLogCount=0;
+var uploadSide='source',uploadFileQueue=[];
 var previewedFiles={src:null,tgt:null};
 var currentFsFilter='all';
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
 async function init(){await refresh();setInterval(refresh,4000);}
 
 async function refresh(){
@@ -661,10 +629,12 @@ async function refresh(){
   document.getElementById('scan-ind').style.display=status.scanning?'inline-block':'none';
   document.getElementById('scan-btn').disabled=status.scanning;
   if(status.last_scan) document.getElementById('last-scan').textContent='Scanned: '+status.last_scan;
-  var thr=status.pass_threshold||100, sel=status.selected_fields||[];
-  var tmpl=status.active_template||'';
+  var thr=status.pass_threshold||100, sel=status.selected_fields||[], tmpl=status.active_template||'';
   document.getElementById('thr-badge').textContent=
-    'Threshold: '+thr+'%'+(tmpl?' | Template: '+tmpl:sel.length?' | Fields: '+sel.length:'');
+    'Threshold: '+thr+'%'+((!tmpl&&sel.length)?' | Fields: '+sel.length:'');
+  var tmplBadge=document.getElementById('tmpl-badge');
+  if(tmpl){tmplBadge.style.display='';tmplBadge.textContent='📋 '+tmpl;}
+  else{tmplBadge.style.display='none';}
   var newE=activity.slice(0,activity.length-lastLogCount);
   if(lastLogCount>0) newE.forEach(e=>toast(e.message,e.level));
   lastLogCount=activity.length;
@@ -680,17 +650,15 @@ async function refresh(){
 
 async function triggerScan(){await fetch('/api/scan',{method:'POST'});setTimeout(refresh,600);}
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
 function renderSidebar(status){
   var list=document.getElementById('table-list'),html='';
   status.pairs.forEach(pair=>{
     var fs=(status.file_states||{})[pair.name]||{},st=fs.state||'';
     if(!pair.has_pair){
-      var side=pair.source_path?'no target':'no source';
       html+='<div class="sb-unmatched" onclick="openPairManager()" title="Click to pair">'+
             '<div class="sb-icon sb-icon-warn">⚠</div>'+
             '<div style="min-width:0;flex:1"><div class="tname">'+esc(pair.name)+'</div>'+
-            '<div class="tsub">'+side+' — click to pair</div></div></div>';
+            '<div class="tsub">'+(pair.source_path?'no target':'no source')+' — click to pair</div></div></div>';
       return;
     }
     var pill='';
@@ -703,14 +671,13 @@ function renderSidebar(status){
       else if(s==='ERROR')   pill='<span class="sp sp-fail">ERR</span>';
       else                   pill='<span class="sp sp-new">New</span>';
     }
-    var isManual=pair.match_type==='manual';
     var act=activeTable===pair.name?'active':'';
+    var isManual=pair.match_type==='manual';
     html+='<div class="sb-item '+act+'" onclick="selectTable(\''+pair.name+'\',this)">'+
           '<div class="sb-icon sb-icon-tbl">📊</div>'+
           '<div style="min-width:0;flex:1">'+
           '<div class="tname">'+esc(pair.name)+(isManual?' <span style="font-size:9px;font-weight:400;color:var(--accent)">[paired]</span>':'')+'</div>'+
-          '<div class="tsub">'+esc(pair.source_file)+' ↔ '+esc(pair.target_file)+'</div></div>'+
-          pill+'</div>';
+          '<div class="tsub">'+esc(pair.source_file)+' ↔ '+esc(pair.target_file)+'</div></div>'+pill+'</div>';
   });
   if(!html) html='<div style="padding:18px 15px;font-size:12px;color:var(--muted);line-height:1.6">'+
     'No file pairs found.<br>Upload files and use <b>Pairs</b> to link them.</div>';
@@ -742,12 +709,11 @@ function renderValidating(name,fs){
     '<div style="color:var(--muted);font-size:12px;padding:14px 0">Results will appear automatically.</div>';
 }
 
-// ─── Detail view ──────────────────────────────────────────────────────────────
 function renderDetail(r){
   document.getElementById('welcome').style.display='none';
   var det=document.getElementById('detail');
   det.style.display='block';
-  var thr=r.pass_threshold||100,sel=r.selected_fields||[];
+  var thr=r.pass_threshold||100, sel=r.selected_fields||[];
   var pc=r.status==='PASS'?'pill-pass':r.status==='WARNING'?'pill-warn':r.status==='ERROR'?'pill-err':'pill-fail';
   var fs=allStates[r.name]||{};
   var banner=fs.state==='changed'?'<div class="banner bn-chg">⚠ File changed — re-validation queued.</div>':'';
@@ -757,12 +723,17 @@ function renderDetail(r){
     ?'<a class="dl-btn" href="/api/download/'+encodeURIComponent(r.name)+'" download="'+esc(r.excel_file)+'">↓ Excel</a>'
     :'<span class="dl-btn disabled">↓ Excel</span>';
   var err=r.errors&&r.errors.length?'<div class="err-box">✗ '+r.errors.map(esc).join('<br>')+'</div>':'';
-  var thrInfo='<div class="thr-info">✓ Pass threshold: <b>'+thr+'%</b>'
-    +(r.template_used?' &nbsp;·&nbsp; Template: <b>'+esc(r.template_used)+'</b>'
-      :sel.length?' &nbsp;·&nbsp; <b>'+sel.length+'</b> selected fields':' &nbsp;·&nbsp; All fields')
-    +'</div>';
 
-  var so=r.records_only_in_source,to=r.records_only_in_target;
+  // Info bar: threshold + template or field selection
+  var thrHtml='<span class="info-bar">✓ Threshold: <b>'+thr+'%</b>'
+    +((!r.template_used&&sel.length)?' &nbsp;·&nbsp; <b>'+sel.length+'</b> selected fields':' &nbsp;·&nbsp; All fields')
+    +'</span>';
+  var tmplHtml=r.template_used
+    ?'<span class="tmpl-bar">📋 Template: <b>'+esc(r.template_used)+'</b> ('+
+      (r.total_fields||0)+' fields validated)</span>'
+    :'';
+
+  var so=r.records_only_in_source, to=r.records_only_in_target;
   var cards='<div class="cards">'+
     card(fmt(r.total_source_records),'Source records','')+
     card(fmt(r.total_target_records),'Target records','')+
@@ -806,7 +777,7 @@ function renderDetail(r){
       crossHtml+'</div>';
   }
 
-  // Field results table
+  // Field results
   var frows=r.field_results.map((fr,i)=>{
     var pct=fr.match_pct,fthr=fr.pass_threshold||thr;
     var bc=pct>=fthr?'var(--pass)':pct>=(fthr*0.8)?'var(--warn)':'var(--fail)';
@@ -821,7 +792,8 @@ function renderDetail(r){
       :'<div class="ft">'+esc(fr.field)+'</div>';
     var methodBadge='';
     if(fr.mapping_method&&fr.mapping_method!=='exact'){
-      var ml2={alias_object:'alias',alias_global:'global alias',fuzzy:'fuzzy ('+Math.round((fr.mapping_confidence||0)*100)+'%)'};
+      var ml2={alias_object:'alias',alias_global:'global alias',
+               fuzzy:'fuzzy ('+Math.round((fr.mapping_confidence||0)*100)+'%)'};
       methodBadge=' <span style="font-size:9px;padding:1px 6px;border-radius:4px;background:var(--accent-light);color:var(--accent)">'+(ml2[fr.mapping_method]||fr.mapping_method)+'</span>';
     }
     var totalMiss=fr.mismatch_count||(fr.mismatches?fr.mismatches.length:0);
@@ -874,7 +846,7 @@ function renderDetail(r){
     (r.sap_object?' · <span style="color:var(--muted)">'+esc(r.sap_object)+'</span>':'')+
     '</div></div>'+
     '<div class="det-right">'+dlBtn+'<span class="st-pill '+pc+'">'+r.status+'</span></div></div>'+
-    thrInfo+cards+mapHtml+
+    thrHtml+tmplHtml+cards+mapHtml+
     '<div class="sec">Field-level results</div>'+
     '<div class="tbl-wrap"><table><thead><tr>'+
     '<th>Field</th><th>Type</th><th>Total</th><th>Matched</th>'+
@@ -891,7 +863,7 @@ function toggleRow(i,event){
   if(btn) btn.classList.toggle('open',!open);
 }
 
-// ─── Upload modal ─────────────────────────────────────────────────────────────
+// ── Upload modal ──────────────────────────────────────────────────────────────
 function openUploadModal(side){
   uploadSide=side;uploadFileQueue=[];
   document.getElementById('upload-modal-title').textContent=
@@ -913,7 +885,6 @@ function onUploadFilesChosen(input){
     '<span style="font-size:10px;color:var(--muted)">'+fmt(Math.round(item.file.size/1024))+' KB</span></div>'
   ).join('');
   document.getElementById('upload-queue').style.display='block';
-  document.getElementById('upload-status').textContent='';
 }
 async function confirmUpload(){
   var st=document.getElementById('upload-status');
@@ -929,27 +900,26 @@ async function confirmUpload(){
     }catch(e){errors.push(String(e));}
   }
   if(errors.length&&!saved.length){st.style.color='var(--fail)';st.textContent='Errors: '+errors.join(', ');return;}
-  st.style.color='var(--pass)';st.textContent='Uploaded: '+saved.join(', ');
+  st.style.color='var(--pass)';st.textContent='✓ Uploaded: '+saved.join(', ');
   var stEl=document.getElementById(uploadSide==='source'?'src-st':'tgt-st');
   if(stEl){stEl.style.color='var(--pass)';stEl.textContent='✓ '+saved.join(', ');}
   toast('Uploaded to '+uploadSide+': '+saved.join(', '),'success');
   setTimeout(()=>{closeModal('upload-modal');refresh();},900);
 }
 
-// ─── Pair manager ─────────────────────────────────────────────────────────────
+// ── Pair manager ──────────────────────────────────────────────────────────────
 async function openPairManager(){
   document.getElementById('pair-modal').classList.add('open');
   document.getElementById('pair-create-status').textContent='';
-  await loadPairDropdowns();
-  await loadExistingPairs();
+  await loadPairDropdowns();await loadExistingPairs();
 }
 async function loadPairDropdowns(){
   var data=await fetch('/api/files/list').then(r=>r.json());
-  var srcSel=document.getElementById('pair-src-sel');
-  var tgtSel=document.getElementById('pair-tgt-sel');
-  srcSel.innerHTML='<option value="">— choose source file —</option>'+
+  document.getElementById('pair-src-sel').innerHTML=
+    '<option value="">— choose source file —</option>'+
     (data.source_files||[]).map(f=>'<option value="'+esc(f)+'">'+esc(f)+'</option>').join('');
-  tgtSel.innerHTML='<option value="">— choose target file —</option>'+
+  document.getElementById('pair-tgt-sel').innerHTML=
+    '<option value="">— choose target file —</option>'+
     (data.target_files||[]).map(f=>'<option value="'+esc(f)+'">'+esc(f)+'</option>').join('');
 }
 async function loadExistingPairs(){
@@ -962,10 +932,9 @@ async function loadExistingPairs(){
   el.innerHTML=pairs.map(p=>
     '<div style="display:flex;align-items:center;gap:9px;padding:9px 12px;'+
     'background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">'+
-    '<div style="flex:1;min-width:0">'+
-    '<div style="font-weight:600;font-size:12px">'+esc(p.name)+'</div>'+
+    '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12px">'+esc(p.name)+'</div>'+
     '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+esc(p.source_file)+' ↔ '+esc(p.target_file)+'</div></div>'+
-    '<button onclick="deletePair(\''+esc(p.name)+'\')" class="tmpl-btn del">✕ Remove</button></div>'
+    '<button onclick="deletePair(\''+esc(p.name)+'\')" class="t-btn del">✕ Remove</button></div>'
   ).join('');
 }
 async function createPair(){
@@ -981,24 +950,22 @@ async function createPair(){
   var existing=await fetch('/api/pairs').then(r=>r.json());
   var filtered=existing.filter(p=>p.name!==pairName);
   filtered.push({name:pairName,source_file:srcFile,target_file:tgtFile});
-  var res=await fetch('/api/pairs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pairs:filtered})});
+  var res=await fetch('/api/pairs',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pairs:filtered})});
   var data=await res.json();
   if(data.ok){
-    st.style.color='var(--pass)';
-    st.textContent='✓ Pair created: '+pairName;
+    st.style.color='var(--pass)';st.textContent='✓ Pair created: '+pairName;
     toast('Pair created: '+pairName,'success');
-    await loadExistingPairs();
-    setTimeout(()=>refresh(),400);
+    await loadExistingPairs();setTimeout(()=>refresh(),400);
   }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
 }
 async function deletePair(name){
   await fetch('/api/pairs/'+encodeURIComponent(name),{method:'DELETE'});
   toast('Pair removed: '+name,'info');
-  await loadExistingPairs();
-  refresh();
+  await loadExistingPairs();refresh();
 }
 
-// ─── Log / Reports ────────────────────────────────────────────────────────────
+// ── Log / Reports ─────────────────────────────────────────────────────────────
 async function openLog(){
   document.getElementById('log-modal').classList.add('open');
   var activity=await fetch('/api/activity').then(r=>r.json());
@@ -1024,7 +991,7 @@ async function openReports(){
   ).join('');
 }
 
-// ─── Settings ─────────────────────────────────────────────────────────────────
+// ── Settings ──────────────────────────────────────────────────────────────────
 async function openSettings(){
   document.getElementById('set-modal').classList.add('open');
   var cfg=await fetch('/api/config').then(r=>r.json());
@@ -1047,44 +1014,46 @@ async function openSettings(){
     fst.style.color=sel.length?'var(--pass)':'var(--muted)';
     fst.textContent=sel.length?'Validating '+sel.length+' selected field(s).':'Validating all fields.';
   }
-  // Load templates
   await loadTemplateList(cfg.active_template||'');
 }
 
-// ─── Template management ───────────────────────────────────────────────────────
+// ── Template management ───────────────────────────────────────────────────────
 async function loadTemplateList(activeTemplate){
   var templates=await fetch('/api/templates').then(r=>r.json());
   var el=document.getElementById('template-list');
-  var activeInfo=document.getElementById('tmpl-active-info');
+  var st=document.getElementById('tmpl-st');
   if(!templates||!templates.length){
-    el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:8px 0">'+
-      'No templates uploaded yet. Upload a CSV/XLSX/TXT file with SAP field names (one per row).</div>';
-    activeInfo.textContent='No template active — validating all fields (or manual selection).';
+    el.innerHTML='<div style="background:var(--surface2);border:1px dashed var(--border);'+
+      'border-radius:9px;padding:16px;text-align:center;font-size:12px;color:var(--muted)">'+
+      'No templates uploaded yet.<br>Upload a CSV with one field name per row to get started.</div>';
+    st.textContent='';st.style.color='var(--muted)';
     return;
   }
   el.innerHTML=templates.map(t=>{
     var isActive=t.is_active||(t.filename===activeTemplate);
-    return '<div class="tmpl-card'+(isActive?' active':'')+'">'+
-      '<div class="tmpl-card-info">'+
-      '<div class="tmpl-card-name">📋 '+esc(t.filename)+
-      (isActive?'<span class="tmpl-active-badge">ACTIVE</span>':'')+
-      '</div>'+
-      '<div class="tmpl-card-meta">'+t.field_count+' fields · '+t.modified+'</div>'+
-      '<div style="font-size:10px;color:var(--muted);margin-top:3px">'+
-      (t.fields||[]).slice(0,6).map(f=>'<code style="margin:0 2px;font-size:9px">'+esc(f)+'</code>').join('')+
-      (t.field_count>6?'<span style="font-size:9px;color:var(--muted)"> +'+（t.field_count-6)+'more</span>':'')+
-      '</div></div>'+
-      '<div style="display:flex;gap:6px;flex-direction:column">'+
+    var preview=(t.fields||[]).slice(0,8).map(f=>'<code style="font-size:9px;margin:1px">'+esc(f)+'</code>').join(' ')+
+      (t.field_count>8?' <span style="font-size:9px;color:var(--muted)">+'+（t.field_count-8)+' more</span>':'');
+    return '<div class="tmpl-card'+(isActive?' is-active':'')+'">'+
+      '<div class="tmpl-info">'+
+      '<div class="tmpl-name">📋 '+esc(t.filename)+
+      (isActive?'<span class="active-badge">✓ ACTIVE</span>':'')+'</div>'+
+      '<div class="tmpl-meta">'+t.field_count+' fields · '+t.modified+'</div>'+
+      '<div class="tmpl-fields-preview">'+preview+'</div></div>'+
+      '<div class="tmpl-actions">'+
       (isActive
-        ?'<button class="tmpl-btn deactivate" onclick="deactivateTemplate()">Deactivate</button>'
-        :'<button class="tmpl-btn activate" onclick="activateTemplate(\''+esc(t.filename)+'\')">Activate</button>')+
-      '<button class="tmpl-btn del" onclick="deleteTemplate(\''+esc(t.filename)+'\')">Delete</button>'+
+        ?'<button class="t-btn deactivate" onclick="deactivateTemplate()">Deactivate</button>'
+        :'<button class="t-btn activate" onclick="activateTemplate(\''+esc(t.filename)+'\')">Activate</button>')+
+      '<button class="t-btn del" onclick="deleteTemplate(\''+esc(t.filename)+'\')">Delete</button>'+
       '</div></div>';
   }).join('');
   var active=templates.find(t=>t.is_active||(t.filename===activeTemplate));
-  activeInfo.textContent=active
-    ?'✓ Active template: '+active.filename+' ('+active.field_count+' fields)'
-    :'No template active — validating all fields.';
+  if(active){
+    st.style.color='var(--pass)';
+    st.textContent='✓ Active template: '+active.filename+' — validating '+active.field_count+' fields.';
+  }else{
+    st.style.color='var(--muted)';
+    st.textContent='No template active — validating all fields (or manual selection).';
+  }
 }
 
 async function uploadTemplate(input){
@@ -1097,11 +1066,15 @@ async function uploadTemplate(input){
     var data=await res.json();
     if(data.ok){
       st.style.color='var(--pass)';
-      st.textContent='✓ Template uploaded: '+data.filename+' ('+data.field_count+' fields)';
-      toast('Template uploaded: '+data.filename,'success');
+      st.textContent='✓ Uploaded: '+data.filename+' ('+data.field_count+' fields detected: '+
+        (data.fields||[]).slice(0,5).join(', ')+(data.field_count>5?' …':'')+'). Click Activate to use it.';
+      toast('Template uploaded: '+data.filename+' ('+data.field_count+' fields)','success');
       var cfg=await fetch('/api/config').then(r=>r.json());
       await loadTemplateList(cfg.active_template||'');
-    }else{st.style.color='var(--fail)';st.textContent=data.error||'Upload failed';}
+    }else{
+      st.style.color='var(--fail)';
+      st.textContent='✗ '+（data.error||'Upload failed');
+    }
   }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
   input.value='';
 }
@@ -1115,11 +1088,11 @@ async function activateTemplate(filename){
     var data=await res.json();
     if(data.ok){
       st.style.color='var(--pass)';
-      st.textContent='✓ Template activated: '+filename+' ('+data.field_count+' fields) — re-validating…';
-      toast('Template activated: '+filename,'success');
+      st.textContent='✓ Activated: '+filename+' ('+data.field_count+' fields) — re-validating all tables…';
+      toast('Template activated: '+filename+' ('+data.field_count+' fields)','success');
       await loadTemplateList(filename);
-      setTimeout(()=>refresh(),1200);
-    }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+      setTimeout(()=>refresh(),1500);
+    }else{st.style.color='var(--fail)';st.textContent='✗ '+(data.error||'Failed');}
   }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
 }
 
@@ -1131,29 +1104,31 @@ async function deactivateTemplate(){
       headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:''})});
     var data=await res.json();
     if(data.ok){
-      st.style.color='var(--pass)';st.textContent='Template deactivated — using all fields.';
+      st.style.color='var(--pass)';st.textContent='Template deactivated — validating all fields.';
       toast('Template deactivated','info');
       await loadTemplateList('');
-      setTimeout(()=>refresh(),1200);
-    }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+      setTimeout(()=>refresh(),1500);
+    }else{st.style.color='var(--fail)';st.textContent='✗ '+(data.error||'Failed');}
   }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
 }
 
 async function deleteTemplate(filename){
   if(!confirm('Delete template "'+filename+'"?')) return;
   var st=document.getElementById('tmpl-st');
-  var res=await fetch('/api/templates/'+encodeURIComponent(filename),{method:'DELETE'});
-  var data=await res.json();
-  if(data.ok){
-    st.style.color='var(--pass)';st.textContent='Template deleted.';
-    toast('Template deleted: '+filename,'info');
-    var cfg=await fetch('/api/config').then(r=>r.json());
-    await loadTemplateList(cfg.active_template||'');
-    setTimeout(()=>refresh(),800);
-  }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+  try{
+    var res=await fetch('/api/templates/'+encodeURIComponent(filename),{method:'DELETE'});
+    var data=await res.json();
+    if(data.ok){
+      st.style.color='var(--pass)';st.textContent='Template deleted.';
+      toast('Template deleted: '+filename,'info');
+      var cfg=await fetch('/api/config').then(r=>r.json());
+      await loadTemplateList(cfg.active_template||'');
+      setTimeout(()=>refresh(),800);
+    }else{st.style.color='var(--fail)';st.textContent='✗ '+(data.error||'Failed');}
+  }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
 }
 
-// ─── Field selection ──────────────────────────────────────────────────────────
+// ── Field selection ───────────────────────────────────────────────────────────
 function previewFileChosen(side,input){
   if(!input.files||!input.files.length) return;
   previewedFiles[side]=input.files[0];
@@ -1171,20 +1146,23 @@ async function loadFieldsFromFiles(){
       var fd=new FormData();fd.append('file',previewedFiles.src);
       var r=await fetch('/api/upload/source',{method:'POST',body:fd});
       var d=await r.json();
-      if(d.ok){var cfg=await fetch('/api/config').then(r=>r.json());srcPath=cfg.source_dir+'/'+previewedFiles.src.name;}
+      if(d.ok){var c=await fetch('/api/config').then(r=>r.json());srcPath=c.source_dir+'/'+previewedFiles.src.name;}
     }
     if(previewedFiles.tgt){
       var fd2=new FormData();fd2.append('file',previewedFiles.tgt);
       var r2=await fetch('/api/upload/target',{method:'POST',body:fd2});
       var d2=await r2.json();
-      if(d2.ok){var cfg2=await fetch('/api/config').then(r=>r.json());tgtPath=cfg2.target_dir+'/'+previewedFiles.tgt.name;}
+      if(d2.ok){var c2=await fetch('/api/config').then(r=>r.json());tgtPath=c2.target_dir+'/'+previewedFiles.tgt.name;}
     }
   }catch(e){}
   try{
-    var res=await fetch('/api/fields/preview',{method:'POST',headers:{'Content-Type':'application/json'},
+    var res=await fetch('/api/fields/preview',{method:'POST',
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({source_path:srcPath,target_path:tgtPath})});
     var data=await res.json();
-    if(data.errors&&Object.keys(data.errors).length){st.style.color='var(--fail)';st.textContent=Object.values(data.errors).join(' | ');return;}
+    if(data.errors&&Object.keys(data.errors).length){
+      st.style.color='var(--fail)';st.textContent=Object.values(data.errors).join(' | ');return;
+    }
     renderFieldCheckboxes(data.fields,data);
     st.style.color='var(--pass)';
     st.textContent=data.common+' common'+(data.src_only?', '+data.src_only+' src-only':'')+
@@ -1210,7 +1188,7 @@ function renderFieldCheckboxes(fields,summary){
     var role=f.common?'common':(f.in_source?'src_only':'tgt_only');
     var sc=f.in_source?'<span style="font-size:8px;background:var(--pass-bg);color:var(--pass);padding:0 4px;border-radius:3px;margin-left:3px">S</span>':'';
     var tc=f.in_target?'<span style="font-size:8px;background:var(--info-bg);color:var(--info);padding:0 4px;border-radius:3px;margin-left:2px">T</span>':'';
-    return '<label class="fc-item" '+(canSel?'':'style="opacity:.45" title="not in both files"')+
+    return '<label class="fc-item"'+(canSel?'':' style="opacity:.45" title="not in both files"')+
       ' data-field="'+f.field.toLowerCase()+'" data-label="'+lbl.toLowerCase()+'" data-role="'+role+'">'+
       '<input type="checkbox" value="'+esc(f.field)+'"'+(f.selected?' checked':'')+(canSel?'':' disabled')+' onchange="updateFsCount()">'+
       '<span><div class="fc-label">'+esc(lbl)+sc+tc+'</div>'+tech+'</span></label>';
@@ -1218,7 +1196,8 @@ function renderFieldCheckboxes(fields,summary){
   updateFsCount();
 }
 function setFsFilter(btn,filter){
-  document.querySelectorAll('#fs-filter-bar .fs-btn').forEach(b=>{b.style.background='transparent';b.style.borderColor='var(--border)';b.style.color='var(--muted)';});
+  document.querySelectorAll('#fs-filter-bar .fs-btn').forEach(b=>{
+    b.style.background='transparent';b.style.borderColor='var(--border)';b.style.color='var(--muted)';});
   btn.style.background='var(--accent)';btn.style.borderColor='var(--accent)';btn.style.color='#fff';
   currentFsFilter=filter;filterFieldCheckboxes();
 }
@@ -1226,9 +1205,7 @@ function filterFieldCheckboxes(){
   var q=(document.getElementById('fs-search').value||'').toLowerCase();
   document.querySelectorAll('#field-checkboxes .fc-item').forEach(item=>{
     var field=item.dataset.field||'',label=item.dataset.label||'',role=item.dataset.role||'';
-    var mf=currentFsFilter==='all'||currentFsFilter===role;
-    var ms=!q||field.includes(q)||label.includes(q);
-    item.style.display=(mf&&ms)?'':'none';
+    item.style.display=((currentFsFilter==='all'||currentFsFilter===role)&&(!q||field.includes(q)||label.includes(q)))?'':'none';
   });
 }
 function selectAllFields(){document.querySelectorAll('#field-checkboxes input:not(:disabled)').forEach(cb=>{cb.checked=true});updateFsCount();}
@@ -1258,12 +1235,13 @@ async function saveThreshold(){
     body:JSON.stringify({pass_threshold:thr})});
   var data=await res.json();
   if(data.ok){st.style.color='var(--pass)';st.textContent='✓ Threshold → '+thr+'% — re-validating…';
-    toast('Pass threshold → '+thr+'%','info');setTimeout(refresh,800);}
+    toast('Threshold → '+thr+'%','info');setTimeout(refresh,800);}
   else{st.style.color='var(--fail)';st.textContent='Failed';}
 }
 async function saveFieldSelection(){
   var allEn=document.querySelectorAll('#field-checkboxes input:not(:disabled)');
-  if(allEn.length===0){var st=document.getElementById('field-st');st.style.color='var(--warn)';st.textContent='No fields loaded yet.';return;}
+  if(allEn.length===0){var st=document.getElementById('field-st');
+    st.style.color='var(--warn)';st.textContent='No fields loaded yet.';return;}
   var allCh=document.querySelectorAll('#field-checkboxes input:not(:disabled):checked');
   var selected=[];allCh.forEach(cb=>selected.push(cb.value));
   var toSave=selected.length===allEn.length?[]:selected;
@@ -1292,10 +1270,12 @@ async function uploadLabels(input){
   input.value='';
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+// ── Utilities ─────────────────────────────────────────────────────────────────
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 ['log-modal','rep-modal','set-modal','upload-modal','pair-modal'].forEach(id=>{
-  document.getElementById(id).addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+  document.getElementById(id).addEventListener('click',function(e){
+    if(e.target===this) this.classList.remove('open');
+  });
 });
 function toast(msg,lvl){
   lvl=lvl||'info';
@@ -1308,7 +1288,6 @@ function toast(msg,lvl){
 function card(val,lbl,cls){return '<div class="card '+cls+'"><div class="n">'+val+'</div><div class="l">'+lbl+'</div></div>';}
 function fmt(n){return Number(n).toLocaleString();}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-
 init();
 </script>
 </body>
