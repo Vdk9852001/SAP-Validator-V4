@@ -10,7 +10,11 @@ Priority order:
   3. Global alias          LAND1  -> COUNTRY  (from GLOBAL block)
   4. Fuzzy match           similarity >= 0.90 auto-mapped, 0.70-0.90 suggested only
 
-To add new mappings: edit config/field_aliases.json — zero code changes needed.
+selected_fields (template) filter logic:
+  A source field is included if:
+    - The source field name itself is in the template  (LAND1 in template, source has LAND1)
+    - OR any of its known alias targets is in template (template has COUNTRY, source has LAND1)
+  This means templates can use either SAP 4.7 names OR S/4HANA names interchangeably.
 """
 
 import json
@@ -100,29 +104,22 @@ def build_field_mapping(
     source_cols     : column names from source file
     target_cols     : column names from target file
     object_type     : SAP object e.g. CUSTOMER, VENDOR — picks alias block
-    selected_fields : if set, only map these source fields
+    selected_fields : template/manual field list — filters which fields to validate.
+                      Can use source names (LAND1) OR target names (COUNTRY) — both work.
     fuzzy_threshold : min similarity for auto-mapping (default 0.90)
     custom_labels   : {FIELD: label} dict for display enrichment
-
-    Returns
-    -------
-    MappingResult
     """
     from core.field_labels import get_label
 
-    aliases        = _load_aliases()
-    custom_labels  = custom_labels or {}
+    aliases       = _load_aliases()
+    custom_labels = custom_labels or {}
 
     src_upper = [s.upper() for s in source_cols]
     tgt_upper = [t.upper() for t in target_cols]
     tgt_set   = set(tgt_upper)
 
-    if selected_fields:
-        sel_upper = [s.upper() for s in selected_fields]
-        src_upper = [s for s in src_upper if s in sel_upper]
-
-    # Resolve alias blocks
-    obj_key = object_type.upper() if object_type else ""
+    # ── Resolve alias blocks up-front (needed for smart template filter) ──────
+    obj_key     = object_type.upper() if object_type else ""
     obj_aliases = aliases.get(obj_key, {})
     if not obj_aliases and obj_key:
         for key in aliases:
@@ -130,6 +127,53 @@ def build_field_mapping(
                 obj_aliases = aliases[key]
                 break
     global_aliases = aliases.get("GLOBAL", {})
+
+    # ── Smart selected_fields filter ──────────────────────────────────────────
+    # A source field passes the filter if:
+    #   1. Its own name is in the template  (template says LAND1, source has LAND1)
+    #   2. Any alias target is in template  (template says COUNTRY, source has LAND1)
+    #   3. Any reverse alias is in template (template says NAME1, source has NAMORG1)
+    # This makes templates work regardless of whether the user writes SAP 4.7 or
+    # S/4HANA field names.
+    if selected_fields:
+        sel_upper = set(s.upper() for s in selected_fields)
+
+        # Build reverse alias map: target_name -> [source_names]
+        # e.g. NAMORG1 -> [NAME1], COUNTRY -> [LAND1]
+        reverse_aliases: Dict[str, List[str]] = {}
+        for alias_dict in [obj_aliases, global_aliases]:
+            for src_name, tgt_list in alias_dict.items():
+                for tgt_name in tgt_list:
+                    t = tgt_name.upper()
+                    reverse_aliases.setdefault(t, []).append(src_name.upper())
+
+        filtered = []
+        for s in src_upper:
+            # Check 1: source field name directly in template
+            if s in sel_upper:
+                filtered.append(s)
+                continue
+            # Check 2: any forward alias target in template
+            forward = (
+                [a.upper() for a in obj_aliases.get(s, [])] +
+                [a.upper() for a in global_aliases.get(s, [])]
+            )
+            if any(a in sel_upper for a in forward):
+                filtered.append(s)
+                continue
+            # Check 3: this source field is itself an alias target for a template field
+            # e.g. source has NAMORG1, template has NAME1
+            for sel_field in sel_upper:
+                fwd_of_sel = (
+                    [a.upper() for a in obj_aliases.get(sel_field, [])] +
+                    [a.upper() for a in global_aliases.get(sel_field, [])]
+                )
+                if s in fwd_of_sel:
+                    filtered.append(s)
+                    break
+
+        src_upper = filtered
+    # ── End filter ────────────────────────────────────────────────────────────
 
     mapped_details     = []
     mapped_fields      = {}
