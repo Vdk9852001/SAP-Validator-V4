@@ -1,25 +1,23 @@
 """
 SAP Migration Post-Load Validator — Core Engine V4
 ===================================================
-Performance optimisations for lakh-scale files:
-  1. _load_file: reads only the columns actually needed (usecols) — skips unused columns entirely
-  2. _load_file: uses efficient dtypes, engine='c', na_filter=False for CSV
-  3. validate:   does NOT merge full dataframes — uses set operations for key counts,
-                 then merges only the two columns needed per field (not all columns at once)
-  4. _validate_field: builds mismatch list using .to_dict() instead of .iterrows()
-  5. _normalise_key: done in-place without .copy()
-  6. Numeric detection: skips columns that are clearly non-numeric from dtype
+Key improvements:
+  1. Composite key support — joins on MATNR+KSCHL+VKORG instead of just MATNR
+  2. Dynamic key detection via key_detector.py
+  3. Duplicate key reporting
+  4. Column-only loading (usecols) for performance on lakh-scale files
+  5. Per-field 2-column merge instead of full N-column merge
+  6. to_dict() instead of iterrows() for mismatch collection
 """
 
 import pandas as pd
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List
 import logging
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_JOIN_KEY       = "MATNR"
 DEFAULT_PASS_THRESHOLD = 100.0
 
 
@@ -51,8 +49,8 @@ class FieldResult:
 
 @dataclass
 class MappingReport:
-    join_key:           str
-    join_key_label:     str
+    join_keys:          List[str]   # composite key columns
+    join_key_labels:    Dict[str, str]
     matched_fields:     list
     source_only_fields: list
     target_only_fields: list
@@ -62,6 +60,13 @@ class MappingReport:
     total_target_cols:  int
     selected_fields:    list  = field(default_factory=list)
     pass_threshold:     float = DEFAULT_PASS_THRESHOLD
+    # Backwards compat
+    @property
+    def join_key(self) -> str:
+        return "+".join(self.join_keys) if self.join_keys else ""
+    @property
+    def join_key_label(self) -> str:
+        return " + ".join(self.join_key_labels.get(k, k) for k in self.join_keys)
 
 
 @dataclass
@@ -76,6 +81,13 @@ class ValidationResult:
     mapping:                 MappingReport = None
     field_results:           list = field(default_factory=list)
     errors:                  list = field(default_factory=list)
+    # Composite key info
+    join_keys:               List[str] = field(default_factory=list)
+    key_detection_method:    str = ""
+    key_confidence:          str = ""
+    duplicate_src:           int = 0
+    duplicate_tgt:           int = 0
+    duplicate_key_samples:   list = field(default_factory=list)
 
     @property
     def overall_status(self) -> str:
@@ -95,13 +107,19 @@ class ValidationResult:
         }
 
 
+# ── Composite key constant ────────────────────────────────────────────────────
+_CK = "__CK__"   # internal composite key column name
+
+
 class MaterialValidator:
 
     def __init__(
         self,
         field_map:           Dict[str, str] = None,
         tolerance_map:       dict  = None,
-        join_key:            str   = None,
+        join_key:            str   = None,    # single key (legacy)
+        join_keys:           List[str] = None, # composite key (new)
+        manual_join_keys:    List[str] = None, # user-specified override
         pass_threshold:      float = DEFAULT_PASS_THRESHOLD,
         selected_fields:     list  = None,
         numeric_sample_rows: int   = 200,
@@ -110,7 +128,14 @@ class MaterialValidator:
     ):
         self.field_map            = field_map
         self.tolerance_overrides  = tolerance_map or {}
-        self.join_key             = join_key
+        # Support both single and composite key
+        if join_keys:
+            self.join_keys = [k.upper() for k in join_keys]
+        elif join_key:
+            self.join_keys = [join_key.upper()]
+        else:
+            self.join_keys = []
+        self.manual_join_keys     = [k.upper() for k in (manual_join_keys or [])]
         self.pass_threshold       = pass_threshold
         self.selected_fields      = [f.strip().upper() for f in (selected_fields or [])]
         self.numeric_sample_rows  = numeric_sample_rows
@@ -137,40 +162,40 @@ class MaterialValidator:
         source_delimiter:  str = ",",
         target_delimiter:  str = ",",
         max_mismatch_rows: int = 200,
+        object_name:       str = "",
     ) -> ValidationResult:
 
-        # ── Step 1: detect join key from headers only (no full load yet) ──────
-        join_key = self._detect_join_key_from_path(source_path, target_path,
-                                                    source_delimiter, target_delimiter)
-
-        # ── Step 2: resolve the field map (which src/tgt cols we need) ────────
-        if self.field_map:
-            field_map   = {s.upper(): t.upper() for s, t in self.field_map.items()}
-            needed_src  = set(field_map.keys())
-            needed_tgt  = set(field_map.values())
-        else:
-            # No external map: load headers to find common columns
-            src_hdr, tgt_hdr = self._read_headers(source_path, source_delimiter), \
-                               self._read_headers(target_path, target_delimiter)
-            common     = set(src_hdr) & set(tgt_hdr) - {join_key}
-            field_map  = {c: c for c in common}
-            needed_src = set(field_map.keys())
-            needed_tgt = set(field_map.values())
-
-        if not join_key:
+        # ── Read headers first ────────────────────────────────────────────────
+        try:
+            src_hdrs = self._read_headers(source_path, source_delimiter)
+            tgt_hdrs = self._read_headers(target_path, target_delimiter)
+        except Exception as e:
             return ValidationResult(
                 source_file=source_path, target_file=target_path,
                 total_source_records=0, total_target_records=0,
-                records_matched=0, records_only_in_source=0, records_only_in_target=0,
-                errors=["No join key found. Check that source and target share a key column."]
+                records_matched=0, records_only_in_source=0,
+                records_only_in_target=0,
+                errors=[f"Cannot read file headers: {e}"]
             )
 
-        # ── Step 3: load ONLY the columns we actually need ────────────────────
-        src_cols_needed = list(needed_src | {join_key})
-        tgt_cols_needed = list(needed_tgt | {join_key})
+        common_cols = sorted(set(src_hdrs) & set(tgt_hdrs))
+
+        # ── Resolve field map ─────────────────────────────────────────────────
+        if self.field_map:
+            field_map  = {s.upper(): t.upper() for s, t in self.field_map.items()}
+            needed_src = set(field_map.keys())
+            needed_tgt = set(field_map.values())
+        else:
+            field_map  = {c: c for c in common_cols}
+            needed_src = set(field_map.keys())
+            needed_tgt = set(field_map.values())
+
+        # ── Load ONLY needed columns ──────────────────────────────────────────
+        all_needed_src = list(needed_src | set(src_hdrs))  # full file needed for key detection
+        all_needed_tgt = list(needed_tgt | set(tgt_hdrs))
 
         try:
-            src_df = self._load_file_cols(source_path, source_delimiter, src_cols_needed)
+            src_df = self._load_file_cols(source_path, source_delimiter, src_hdrs)
         except Exception as e:
             return ValidationResult(
                 source_file=source_path, target_file=target_path,
@@ -178,9 +203,8 @@ class MaterialValidator:
                 records_matched=0, records_only_in_source=0, records_only_in_target=0,
                 errors=[f"Cannot load source file: {e}"]
             )
-
         try:
-            tgt_df = self._load_file_cols(target_path, target_delimiter, tgt_cols_needed)
+            tgt_df = self._load_file_cols(target_path, target_delimiter, tgt_hdrs)
         except Exception as e:
             return ValidationResult(
                 source_file=source_path, target_file=target_path,
@@ -189,47 +213,90 @@ class MaterialValidator:
                 errors=[f"Cannot load target file: {e}"]
             )
 
-        # ── Step 4: normalise join key ─────────────────────────────────────────
-        src_df = self._normalise_key(src_df, join_key)
-        tgt_df = self._normalise_key(tgt_df, join_key)
+        # ── Detect composite join key ─────────────────────────────────────────
+        from core.key_detector import detect_composite_key
+        kd = detect_composite_key(
+            src_df=src_df,
+            tgt_df=tgt_df,
+            object_name=object_name or self._infer_object(source_path),
+            manual_keys=self.manual_join_keys or (self.join_keys if self.join_keys else None),
+        )
+        join_keys = kd.join_keys
 
-        # ── Step 5: key set counts (no full merge needed for this) ────────────
-        src_keys = set(src_df[join_key].dropna().unique())
-        tgt_keys = set(tgt_df[join_key].dropna().unique())
-        matched_keys   = src_keys & tgt_keys
-        only_src_keys  = src_keys - tgt_keys
-        only_tgt_keys  = tgt_keys - src_keys
+        if not join_keys:
+            return ValidationResult(
+                source_file=source_path, target_file=target_path,
+                total_source_records=len(src_df), total_target_records=len(tgt_df),
+                records_matched=0, records_only_in_source=0, records_only_in_target=0,
+                errors=["No join key could be detected. Use the dashboard to select join keys manually."]
+            )
 
-        # ── Step 6: detect numeric fields ─────────────────────────────────────
-        pairs   = list(field_map.items())
+        logger.info(
+            f"Join keys: {join_keys} "
+            f"(method={kd.detection_method}, confidence={kd.confidence}, "
+            f"uniqueness src={kd.uniqueness_src:.1%} tgt={kd.uniqueness_tgt:.1%})"
+        )
+
+        # ── Normalise key columns ─────────────────────────────────────────────
+        for k in join_keys:
+            if k in src_df.columns:
+                src_df[k] = src_df[k].astype(str).str.strip().str.upper()
+            if k in tgt_df.columns:
+                tgt_df[k] = tgt_df[k].astype(str).str.strip().str.upper()
+
+        # ── Build composite key column ─────────────────────────────────────────
+        # CK = "VAL1||VAL2||VAL3" — separator unlikely to appear in data
+        SEP = "||"
+        src_df[_CK] = src_df[join_keys].astype(str).agg(SEP.join, axis=1)
+        tgt_df[_CK] = tgt_df[join_keys].astype(str).agg(SEP.join, axis=1)
+
+        # ── Key set analysis ──────────────────────────────────────────────────
+        src_keys = set(src_df[_CK].unique())
+        tgt_keys = set(tgt_df[_CK].unique())
+
+        # Detect duplicate key samples for the dashboard
+        src_dup_mask = src_df[_CK].duplicated(keep=False)
+        tgt_dup_mask = tgt_df[_CK].duplicated(keep=False)
+        dup_src_count = int(src_dup_mask.sum())
+        dup_tgt_count = int(tgt_dup_mask.sum())
+
+        dup_samples = []
+        if dup_src_count > 0:
+            sample_rows = src_df[src_dup_mask].head(10)
+            dup_samples = sample_rows[join_keys].to_dict("records")
+
+        # ── Remove field_map entries that are join keys (don't validate keys) ─
+        field_map = {s: t for s, t in field_map.items()
+                     if s not in join_keys and t not in join_keys}
+
+        # ── Numeric detection ─────────────────────────────────────────────────
+        pairs   = [(s, t) for s, t in field_map.items()
+                   if s in src_df.columns and t in tgt_df.columns]
         tol_map = self._detect_numeric_mapped(src_df, tgt_df, pairs)
         tol_map.update(self.tolerance_overrides)
 
-        # ── Step 7: build mapping report ──────────────────────────────────────
-        src_all_cols = set(self._read_headers(source_path, source_delimiter))
-        tgt_all_cols = set(self._read_headers(target_path, target_delimiter))
+        # ── Build mapping report ──────────────────────────────────────────────
+        from core.field_labels import get_label
         mapping_report = MappingReport(
-            join_key=join_key,
-            join_key_label=self._label(join_key),
+            join_keys=join_keys,
+            join_key_labels={k: get_label(k, self.custom_labels) for k in join_keys},
             matched_fields=list(field_map.keys()),
-            source_only_fields=sorted(src_all_cols - {join_key} - needed_src),
-            target_only_fields=sorted(tgt_all_cols - {join_key} - needed_tgt),
+            source_only_fields=sorted(set(src_hdrs) - set(tgt_hdrs) - set(join_keys)),
+            target_only_fields=sorted(set(tgt_hdrs) - set(src_hdrs) - set(join_keys)),
             numeric_fields=sorted(tol_map.keys()),
             tolerance_map=tol_map,
-            total_source_cols=len(src_all_cols),
-            total_target_cols=len(tgt_all_cols),
+            total_source_cols=len(src_hdrs),
+            total_target_cols=len(tgt_hdrs),
             selected_fields=self.selected_fields,
             pass_threshold=self.pass_threshold,
         )
 
-        # ── Step 8: validate each field pair WITHOUT a full N-column merge ────
-        # We merge only 2 cols at a time (join_key + the field).
-        # For lakh-scale data this is dramatically faster than merging all cols.
+        # ── Validate each field using 2-column merge ──────────────────────────
         field_results = []
         for src_col, tgt_col in field_map.items():
             tolerance = tol_map.get(src_col)
             fr = self._validate_field_fast(
-                src_df, tgt_df, src_col, tgt_col, join_key,
+                src_df, tgt_df, src_col, tgt_col, join_keys,
                 tolerance, max_mismatch_rows
             )
             if fr:
@@ -240,14 +307,20 @@ class MaterialValidator:
             target_file=target_path,
             total_source_records=len(src_df),
             total_target_records=len(tgt_df),
-            records_matched=len(matched_keys),
-            records_only_in_source=len(only_src_keys),
-            records_only_in_target=len(only_tgt_keys),
+            records_matched=len(src_keys & tgt_keys),
+            records_only_in_source=len(src_keys - tgt_keys),
+            records_only_in_target=len(tgt_keys - src_keys),
             mapping=mapping_report,
             field_results=field_results,
+            join_keys=join_keys,
+            key_detection_method=kd.detection_method,
+            key_confidence=kd.confidence,
+            duplicate_src=dup_src_count,
+            duplicate_tgt=dup_tgt_count,
+            duplicate_key_samples=dup_samples,
         )
 
-    # ── Fast per-field validation (2-column merge instead of full merge) ──────
+    # ── Per-field validation (2-column merge) ─────────────────────────────────
 
     def _validate_field_fast(
         self,
@@ -255,7 +328,7 @@ class MaterialValidator:
         tgt_df:    pd.DataFrame,
         src_col:   str,
         tgt_col:   str,
-        join_key:  str,
+        join_keys: List[str],
         tolerance: Optional[float],
         max_rows:  int,
     ) -> Optional[FieldResult]:
@@ -263,22 +336,22 @@ class MaterialValidator:
         if src_col not in src_df.columns or tgt_col not in tgt_df.columns:
             return None
 
-        # Merge only the two relevant columns — tiny memory footprint
+        # Merge on composite key (_CK) — each CK value is unique per record
         if src_col == tgt_col:
-            m = src_df[[join_key, src_col]].merge(
-                tgt_df[[join_key, tgt_col]],
-                on=join_key, how="inner",
+            m = src_df[[_CK, src_col]].merge(
+                tgt_df[[_CK, tgt_col]],
+                on=_CK, how="inner",
                 suffixes=("_src", "_tgt"),
             )
-            sv = m[src_col + "_src"]
-            tv = m[tgt_col + "_tgt"]
+            sv_col = src_col + "_src"
+            tv_col = tgt_col + "_tgt"
         else:
-            m = src_df[[join_key, src_col]].merge(
-                tgt_df[[join_key, tgt_col]],
-                on=join_key, how="inner",
+            m = src_df[[_CK, src_col]].merge(
+                tgt_df[[_CK, tgt_col]],
+                on=_CK, how="inner",
             )
-            sv = m[src_col]
-            tv = m[tgt_col]
+            sv_col = src_col
+            tv_col = tgt_col
 
         total = len(m)
         if total == 0:
@@ -288,11 +361,12 @@ class MaterialValidator:
                 total_records=0, matched=0, mismatched=0,
                 missing_in_target=0, missing_in_source=0,
                 is_numeric=(tolerance is not None),
-                tolerance_used=tolerance,
-                pass_threshold=self.pass_threshold,
+                tolerance_used=tolerance, pass_threshold=self.pass_threshold,
             )
 
-        # ── Null detection ────────────────────────────────────────────────────
+        sv = m[sv_col]
+        tv = m[tv_col]
+
         NULL_VALS  = {"", "nan", "none", "null"}
         sv_null    = sv.isna() | sv.astype(str).str.strip().str.lower().isin(NULL_VALS)
         tv_null    = tv.isna() | tv.astype(str).str.strip().str.lower().isin(NULL_VALS)
@@ -304,7 +378,6 @@ class MaterialValidator:
         sv_v = sv[valid]
         tv_v = tv[valid]
 
-        # ── Comparison ────────────────────────────────────────────────────────
         if tolerance is not None:
             sv_f = pd.to_numeric(sv_v.astype(str).str.replace(",", ".", regex=False), errors="coerce")
             tv_f = pd.to_numeric(tv_v.astype(str).str.replace(",", ".", regex=False), errors="coerce")
@@ -323,39 +396,30 @@ class MaterialValidator:
         miss_tgt_count = int(miss_tgt_m.sum())
         mismatched     = int(mismatch_mask.sum())
 
-        # ── Build mismatch rows using to_dict() — much faster than iterrows() ─
+        # ── Build mismatch list (to_dict is much faster than iterrows) ────────
         mismatches = []
-        key_col = join_key
 
-        def _rows_to_mismatches(mask, sv_col_name, tv_col_name, issue_label, limit):
-            rows = m[mask].head(limit)
-            return [
-                {
-                    "material":     str(r[key_col]),
-                    "source_value": str(r.get(sv_col_name, "")),
-                    "target_value": str(r.get(tv_col_name, "")),
-                    "issue":        issue_label,
-                }
-                for r in rows.to_dict("records")
-            ]
-
-        sv_col_name = (src_col + "_src") if src_col == tgt_col else src_col
-        tv_col_name = (tgt_col + "_tgt") if src_col == tgt_col else tgt_col
+        # Decode CK back to key column values for display
+        def _ck_label(ck_val: str) -> str:
+            parts = ck_val.split("||")
+            if len(join_keys) == 1:
+                return str(parts[0])
+            return " / ".join(f"{k}={v}" for k, v in zip(join_keys, parts))
 
         if miss_src_count > 0:
             for r in m[miss_src_m].head(max_rows).to_dict("records"):
                 mismatches.append({
-                    "material":     str(r[key_col]),
+                    "material":     _ck_label(r[_CK]),
                     "source_value": "(blank)",
-                    "target_value": str(r.get(tv_col_name, "")),
+                    "target_value": str(r.get(tv_col, "")),
                     "issue":        "Missing in source",
                 })
 
         if miss_tgt_count > 0 and len(mismatches) < max_rows:
             for r in m[miss_tgt_m].head(max_rows - len(mismatches)).to_dict("records"):
                 mismatches.append({
-                    "material":     str(r[key_col]),
-                    "source_value": str(r.get(sv_col_name, "")),
+                    "material":     _ck_label(r[_CK]),
+                    "source_value": str(r.get(sv_col, "")),
                     "target_value": "(blank)",
                     "issue":        "Missing in target",
                 })
@@ -366,20 +430,19 @@ class MaterialValidator:
                 sv_mf   = sv_f[mismatch_mask].reindex(mdf.index)
                 tv_mf   = tv_f[mismatch_mask].reindex(mdf.index)
                 diff_mf = diff[mismatch_mask].reindex(mdf.index)
-                for r in mdf.to_dict("records"):
-                    idx = mdf.index[mdf[key_col] == r[key_col]][0] if r[key_col] in mdf[key_col].values else mdf.index[0]
+                for idx, r in zip(mdf.index, mdf.to_dict("records")):
                     mismatches.append({
-                        "material":     str(r[key_col]),
-                        "source_value": float(sv_mf.get(idx, 0)),
-                        "target_value": float(tv_mf.get(idx, 0)),
+                        "material":     _ck_label(r[_CK]),
+                        "source_value": round(float(sv_mf.get(idx, 0)), 4),
+                        "target_value": round(float(tv_mf.get(idx, 0)), 4),
                         "issue":        f"Delta (tol+-{tolerance})",
                     })
             else:
                 for r in mdf.to_dict("records"):
                     mismatches.append({
-                        "material":     str(r[key_col]),
-                        "source_value": str(r.get(sv_col_name, "")),
-                        "target_value": str(r.get(tv_col_name, "")),
+                        "material":     _ck_label(r[_CK]),
+                        "source_value": str(r.get(sv_col, "")),
+                        "target_value": str(r.get(tv_col, "")),
                         "issue":        "Value mismatch",
                     })
 
@@ -392,10 +455,9 @@ class MaterialValidator:
             pass_threshold=self.pass_threshold, mismatch_details=mismatches,
         )
 
-    # ── File loading: only needed columns ────────────────────────────────────
+    # ── File loading helpers ──────────────────────────────────────────────────
 
     def _read_headers(self, path: str, delimiter: str = ",") -> list:
-        """Read only the header row — instant."""
         import csv
         p = str(path)
         if p.lower().endswith((".xlsx", ".xls")):
@@ -409,96 +471,34 @@ class MaterialValidator:
             return [c.strip().upper() for c in next(csv.reader(f, delimiter=delimiter))]
 
     def _load_file_cols(self, path: str, delimiter: str, needed_cols: list) -> pd.DataFrame:
-        """
-        Load ONLY the columns in needed_cols.
-        For a 50-column file where you need 10, this is 5x faster and uses 5x less memory.
-        Falls back gracefully if some columns don't exist.
-        """
-        p = str(path)
+        p           = str(path)
         all_headers = self._read_headers(p, delimiter)
-        # Only request columns that actually exist in the file
-        load_cols = [c for c in all_headers if c in set(c.upper() for c in needed_cols)]
+        needed_set  = set(c.upper() for c in needed_cols)
+        load_cols   = [c for c in all_headers if c in needed_set]
+        if not load_cols:
+            load_cols = None  # load all if nothing matched
 
         if p.lower().endswith((".xlsx", ".xls")):
-            df = pd.read_excel(p, dtype=str, usecols=load_cols if load_cols else None)
+            df = pd.read_excel(p, dtype=str, usecols=load_cols)
         else:
             df = pd.read_csv(
-                p,
-                delimiter=delimiter,
-                dtype=str,
-                encoding="utf-8-sig",
-                low_memory=False,
-                usecols=load_cols if load_cols else None,
-                na_filter=False,   # treat empty string as empty string, not NaN — faster
+                p, delimiter=delimiter, dtype=str,
+                encoding="utf-8-sig", low_memory=False,
+                usecols=load_cols, na_filter=False,
             )
         df.columns = df.columns.str.strip().str.upper()
-        # Strip whitespace from string columns — vectorised
         for col in df.select_dtypes(include="object").columns:
             df[col] = df[col].str.strip()
         return df
 
-    # ── Legacy full-file loader (kept for backwards compat) ──────────────────
-
     def _load_file(self, path: str, delimiter: str) -> pd.DataFrame:
-        return self._load_file_cols(path, delimiter, [])  # empty = load all
+        """Legacy full-load method."""
+        return self._load_file_cols(path, delimiter, [])
 
-    def _normalise_key(self, df: pd.DataFrame, col: str) -> pd.DataFrame:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.strip().str.lstrip("0").str.upper()
-        return df
-
-    # ── Join key detection (from headers only, no full load) ─────────────────
-
-    def _detect_join_key_from_path(
-        self,
-        src_path: str,
-        tgt_path: str,
-        src_delim: str = ",",
-        tgt_delim: str = ",",
-    ) -> Optional[str]:
-        if self.join_key:
-            jk = self.join_key.upper()
-            try:
-                src_hdrs = set(self._read_headers(src_path, src_delim))
-                tgt_hdrs = set(self._read_headers(tgt_path, tgt_delim))
-                if jk in src_hdrs and jk in tgt_hdrs:
-                    return jk
-            except Exception:
-                pass
-            return self.join_key.upper()  # trust the caller even if headers unreadable
-
-        try:
-            src_hdrs = set(self._read_headers(src_path, src_delim))
-            tgt_hdrs = set(self._read_headers(tgt_path, tgt_delim))
-        except Exception:
-            return None
-
-        PRIORITY = ["MATNR","LIFNR","KUNNR","SAKNR","BELNR","EBELN","VBELN",
-                    "ANLN1","KOSTL","PRCTR","BANKL"]
-        common = src_hdrs & tgt_hdrs
-        for pk in PRIORITY:
-            if pk in common:
-                return pk
-        if common:
-            return sorted(common, key=lambda c: (0 if c in ("ID","KEY","CODE") else 1, len(c)))[0]
-        return None
-
-    def _detect_join_key(self, src_df, tgt_df) -> Optional[str]:
-        """Legacy method — kept for any callers that still use it."""
-        if self.join_key:
-            jk = self.join_key.upper()
-            if jk in src_df.columns and jk in tgt_df.columns:
-                return jk
-            return None
-        PRIORITY = ["MATNR","LIFNR","KUNNR","SAKNR","BELNR","EBELN","VBELN",
-                    "ANLN1","KOSTL","PRCTR","BANKL"]
-        common = set(src_df.columns) & set(tgt_df.columns)
-        for pk in PRIORITY:
-            if pk in common:
-                return pk
-        if common:
-            return sorted(common, key=lambda c: (0 if c in ("ID","KEY","CODE") else 1, len(c)))[0]
-        return None
+    @staticmethod
+    def _infer_object(file_path: str) -> str:
+        from pathlib import Path
+        return Path(file_path).stem.upper()
 
     # ── Numeric detection ─────────────────────────────────────────────────────
 
@@ -529,57 +529,57 @@ class MaterialValidator:
                 numeric_cols[src_col] = tol
         return numeric_cols
 
-    def _detect_numeric_columns(self, src_df, tgt_df, columns):
-        return self._detect_numeric_mapped(src_df, tgt_df, [(c, c) for c in columns])
-
     @staticmethod
-    def _scale_tolerance(median_val: float) -> float:
-        if median_val == 0:      return 0.0
-        elif median_val < 1:     return 0.0001
-        elif median_val < 10:    return 0.001
-        elif median_val < 1000:  return 0.01
-        else:                    return 0.1
+    def _scale_tolerance(v: float) -> float:
+        if v == 0:      return 0.0
+        elif v < 1:     return 0.0001
+        elif v < 10:    return 0.001
+        elif v < 1000:  return 0.01
+        else:           return 0.1
 
-    # ── Build field map (when no external map provided) ───────────────────────
+    # ── Legacy single-key helpers ─────────────────────────────────────────────
+
+    def _detect_join_key(self, src_df, tgt_df):
+        if self.join_keys:
+            jk = self.join_keys[0]
+            if jk in src_df.columns and jk in tgt_df.columns:
+                return jk
+        PRIORITY = ["MATNR","LIFNR","KUNNR","SAKNR","BELNR","EBELN","VBELN",
+                    "ANLN1","KOSTL","PRCTR","BANKL"]
+        common = set(src_df.columns) & set(tgt_df.columns)
+        for pk in PRIORITY:
+            if pk in common:
+                return pk
+        return sorted(common)[0] if common else None
+
+    def _normalise_key(self, df, col):
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip().str.lstrip("0").str.upper()
+        return df
 
     def _build_field_map(self, src_df, tgt_df, join_key):
-        """Legacy method — used only when no external field_map is passed."""
+        """Legacy single-key method kept for backwards compatibility."""
         src_cols = set(src_df.columns) - {join_key}
         tgt_cols = set(tgt_df.columns) - {join_key}
-
         if self.field_map:
-            validate_map = {}
-            for src_col, tgt_col in self.field_map.items():
-                s, t = src_col.upper(), tgt_col.upper()
-                if s in src_df.columns and t in tgt_df.columns:
-                    validate_map[s] = t
-            pairs   = list(validate_map.items())
-            tol_map = self._detect_numeric_mapped(src_df, tgt_df, pairs)
-            tol_map.update(self.tolerance_overrides)
-            report = MappingReport(
-                join_key=join_key, join_key_label=self._label(join_key),
-                matched_fields=list(validate_map.keys()),
-                source_only_fields=sorted(src_cols - set(validate_map.keys()) - tgt_cols),
-                target_only_fields=sorted(tgt_cols - set(validate_map.values()) - src_cols),
-                numeric_fields=sorted(tol_map.keys()), tolerance_map=tol_map,
-                total_source_cols=len(src_df.columns),
-                total_target_cols=len(tgt_df.columns),
-                selected_fields=self.selected_fields, pass_threshold=self.pass_threshold,
-            )
-            return validate_map, report
-
-        common        = sorted(src_cols & tgt_cols)
-        validate_cols = [c for c in common if c in self.selected_fields] if self.selected_fields else common
-        tol_map       = self._detect_numeric_columns(src_df, tgt_df, validate_cols)
-        tol_map.update(self.tolerance_overrides)
+            vm = {s.upper(): t.upper() for s, t in self.field_map.items()
+                  if s.upper() in src_df.columns and t.upper() in tgt_df.columns}
+            tol = self._detect_numeric_mapped(src_df, tgt_df, list(vm.items()))
+            tol.update(self.tolerance_overrides)
+        else:
+            cols = sorted(src_cols & tgt_cols)
+            cols = [c for c in cols if c in self.selected_fields] if self.selected_fields else cols
+            vm   = {c: c for c in cols}
+            tol  = self._detect_numeric_mapped(src_df, tgt_df, list(vm.items()))
+            tol.update(self.tolerance_overrides)
+        from core.field_labels import get_label
         report = MappingReport(
-            join_key=join_key, join_key_label=self._label(join_key),
-            matched_fields=common,
+            join_keys=[join_key], join_key_labels={join_key: get_label(join_key, self.custom_labels)},
+            matched_fields=list(vm.keys()),
             source_only_fields=sorted(src_cols - tgt_cols),
             target_only_fields=sorted(tgt_cols - src_cols),
-            numeric_fields=sorted(tol_map.keys()), tolerance_map=tol_map,
-            total_source_cols=len(src_df.columns),
-            total_target_cols=len(tgt_df.columns),
+            numeric_fields=sorted(tol.keys()), tolerance_map=tol,
+            total_source_cols=len(src_df.columns), total_target_cols=len(tgt_df.columns),
             selected_fields=self.selected_fields, pass_threshold=self.pass_threshold,
         )
-        return {col: col for col in validate_cols}, report
+        return vm, report
