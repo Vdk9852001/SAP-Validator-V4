@@ -1711,35 +1711,104 @@ def api_pairs_delete(name):
 
 
 # ── Join key routes ────────────────────────────────────────────────────────────
+# These routes power the "Select Join Keys" panel in the dashboard.
+# No keys are ever hardcoded — everything comes from the actual uploaded files.
 
 @app.route("/api/join-keys", methods=["GET"])
 def api_join_keys_get():
-    """Get all manually configured join keys (per pair name)."""
-    cfg = load_config()
-    return jsonify(cfg.get("manual_join_keys", {}))
+    """Return all saved manual join keys keyed by pair name."""
+    return jsonify(load_config().get("manual_join_keys", {}))
+
+
+@app.route("/api/join-keys/<name>/columns", methods=["GET"])
+def api_join_keys_columns(name):
+    """
+    Return the common columns between source and target files for a pair.
+    This is what the UI shows as checkboxes for the user to pick join keys from.
+    No hardcoding — purely based on what is in the uploaded files.
+    """
+    pname = name.upper()
+    pairs = discover_pairs()
+    pair  = next((p for p in pairs if p["name"] == pname), None)
+    if not pair or not pair["has_pair"]:
+        return jsonify({"error": f"Pair '{pname}' not found or missing files"}), 404
+
+    def read_headers(path):
+        import csv as _csv
+        p = str(path)
+        if p.lower().endswith((".xlsx", ".xls")):
+            import openpyxl
+            wb   = openpyxl.load_workbook(p, read_only=True, data_only=True)
+            ws   = wb.active
+            cols = [str(c.value).strip().upper()
+                    for c in next(ws.iter_rows(max_row=1)) if c.value]
+            wb.close()
+            return cols
+        with open(p, encoding="utf-8-sig") as f:
+            return [c.strip().upper() for c in next(_csv.reader(f))]
+
+    try:
+        src_hdrs = read_headers(pair["source_path"])
+        tgt_hdrs = read_headers(pair["target_path"])
+    except Exception as e:
+        return jsonify({"error": f"Cannot read file headers: {e}"}), 500
+
+    custom      = _get_custom_labels()
+    src_set     = set(src_hdrs)
+    tgt_set     = set(tgt_hdrs)
+    common      = sorted(src_set & tgt_set)
+    src_only    = sorted(src_set - tgt_set)
+    tgt_only    = sorted(tgt_set - src_set)
+
+    # Current saved keys for this pair
+    saved_keys = load_config().get("manual_join_keys", {}).get(pname, [])
+
+    return jsonify({
+        "pair_name":     pname,
+        "source_file":   pair["source_file"],
+        "target_file":   pair["target_file"],
+        "common_columns": [
+            {
+                "field":    col,
+                "label":    get_label(col, custom),
+                "selected": col in saved_keys,
+            }
+            for col in common
+        ],
+        "source_only":   [{"field": c, "label": get_label(c, custom)} for c in src_only],
+        "target_only":   [{"field": c, "label": get_label(c, custom)} for c in tgt_only],
+        "saved_keys":    saved_keys,
+        "total_common":  len(common),
+    })
 
 
 @app.route("/api/join-keys/<name>", methods=["POST"])
 def api_join_keys_set(name):
     """
-    Set manual join keys for a specific pair/table.
-    Body: {"keys": ["MATNR","KSCHL","VKORG"]}
-    Triggers re-validation immediately.
+    Save user-selected join keys for a pair.
+    Body: {"keys": ["MATNR","KSCHL","EKORG"]}
+    Triggers immediate re-validation using the new composite key.
     """
-    data = request.get_json(force=True)
-    keys = [k.strip().upper() for k in data.get("keys", []) if k.strip()]
-    cfg  = load_config()
+    data  = request.get_json(force=True)
+    keys  = [k.strip().upper() for k in data.get("keys", []) if k.strip()]
+    cfg   = load_config()
+    pname = name.upper()
+
     if "manual_join_keys" not in cfg:
         cfg["manual_join_keys"] = {}
-    pname = name.upper()
+
     if keys:
         cfg["manual_join_keys"][pname] = keys
-        log_event(f"Manual join keys set for {pname}: {' + '.join(keys)}", "info")
+        log_event(
+            f"Join keys set for {pname}: {' + '.join(keys)} "
+            f"({len(keys)} field composite key)",
+            "info",
+        )
     else:
         cfg["manual_join_keys"].pop(pname, None)
-        log_event(f"Manual join keys cleared for {pname} — auto-detection will run", "info")
+        log_event(f"Join keys cleared for {pname} — auto-detect will suggest", "info")
+
     save_config(cfg)
-    # Clear only this pair's result so it re-validates
     results_store.pop(pname, None)
     if pname in file_states:
         file_states[pname]["state"] = "changed"
@@ -1749,7 +1818,7 @@ def api_join_keys_set(name):
 
 @app.route("/api/join-keys/<name>", methods=["DELETE"])
 def api_join_keys_clear(name):
-    """Clear manual join keys for a pair — revert to auto-detection."""
+    """Clear saved join keys — auto-detection will suggest on next validation."""
     cfg   = load_config()
     pname = name.upper()
     cfg.get("manual_join_keys", {}).pop(pname, None)
@@ -1757,74 +1826,92 @@ def api_join_keys_clear(name):
     results_store.pop(pname, None)
     if pname in file_states:
         file_states[pname]["state"] = "changed"
-    log_event(f"Join keys cleared for {pname} — auto-detection will run", "info")
+    log_event(f"Join keys cleared for {pname}", "info")
     threading.Thread(target=scan_and_validate_all, daemon=True).start()
     return jsonify({"ok": True})
 
 
-@app.route("/api/join-keys/<name>/detect", methods=["POST"])
-def api_join_keys_detect(name):
+@app.route("/api/join-keys/<name>/suggest", methods=["POST"])
+def api_join_keys_suggest(name):
     """
-    Run key detection on the current source/target files for a pair
-    and return the suggested composite key without saving it.
-    Useful for the 'Suggest keys' button in the UI.
+    Run auto-detection on the uploaded files and return suggested keys.
+    Does NOT save anything — purely a suggestion for the UI to show.
+    The user still has to click 'Apply' to actually save the keys.
     """
     pname = name.upper()
     pairs = discover_pairs()
     pair  = next((p for p in pairs if p["name"] == pname), None)
     if not pair or not pair["has_pair"]:
-        return jsonify({"error": f"Pair {pname} not found or missing files"}), 404
+        return jsonify({"error": f"Pair '{pname}' not found"}), 404
 
     try:
-        from core.key_detector import detect_composite_key
         import pandas as pd
+        from core.key_detector import detect_composite_key
 
-        def read_cols(path):
-            import csv as csv_mod
+        def read_headers(path):
+            import csv as _csv
             p = str(path)
             if p.lower().endswith((".xlsx", ".xls")):
                 import openpyxl
                 wb   = openpyxl.load_workbook(p, read_only=True, data_only=True)
                 ws   = wb.active
-                cols = [str(c.value).strip().upper() for c in next(ws.iter_rows(max_row=1)) if c.value]
+                cols = [str(c.value).strip().upper()
+                        for c in next(ws.iter_rows(max_row=1)) if c.value]
                 wb.close()
                 return cols
             with open(p, encoding="utf-8-sig") as f:
-                return [c.strip().upper() for c in next(csv_mod.reader(f))]
+                return [c.strip().upper() for c in next(_csv.reader(f))]
 
-        src_hdrs = read_cols(pair["source_path"])
-        tgt_hdrs = read_cols(pair["target_path"])
+        src_hdrs = read_headers(pair["source_path"])
+        tgt_hdrs = read_headers(pair["target_path"])
         common   = sorted(set(src_hdrs) & set(tgt_hdrs))
 
-        # Load a sample (max 5000 rows) for uniqueness testing
-        sample = 5000
-        if pair["source_path"].endswith((".xlsx",".xls")):
-            src_df = pd.read_excel(pair["source_path"], dtype=str, nrows=sample)
-        else:
-            src_df = pd.read_csv(pair["source_path"], dtype=str, encoding="utf-8-sig",
-                                 nrows=sample, na_filter=False)
-        if pair["target_path"].endswith((".xlsx",".xls")):
-            tgt_df = pd.read_excel(pair["target_path"], dtype=str, nrows=sample)
-        else:
-            tgt_df = pd.read_csv(pair["target_path"], dtype=str, encoding="utf-8-sig",
-                                 nrows=sample, na_filter=False)
-        src_df.columns = src_df.columns.str.strip().str.upper()
-        tgt_df.columns = tgt_df.columns.str.strip().str.upper()
+        # Sample up to 5000 rows — enough for uniqueness scoring without full load
+        def load_sample(path, cols):
+            p = str(path)
+            if p.lower().endswith((".xlsx", ".xls")):
+                df = pd.read_excel(p, dtype=str, nrows=5000,
+                                   usecols=cols if cols else None)
+            else:
+                df = pd.read_csv(p, dtype=str, encoding="utf-8-sig",
+                                 nrows=5000, na_filter=False,
+                                 usecols=cols if cols else None)
+            df.columns = df.columns.str.strip().str.upper()
+            return df
 
-        kd = detect_composite_key(src_df, tgt_df, object_name=pname)
+        src_df = load_sample(pair["source_path"], common)
+        tgt_df = load_sample(pair["target_path"], common)
+
+        kd     = detect_composite_key(src_df, tgt_df, object_name=pname)
         custom = _get_custom_labels()
+
+        # Show uniqueness score for each common column individually
+        col_scores = []
+        for col in common:
+            if col in src_df.columns and col in tgt_df.columns:
+                src_unique = src_df[col].nunique() / max(len(src_df), 1)
+                tgt_unique = tgt_df[col].nunique() / max(len(tgt_df), 1)
+                col_scores.append({
+                    "field":          col,
+                    "label":          get_label(col, custom),
+                    "src_uniqueness": round(src_unique * 100, 1),
+                    "tgt_uniqueness": round(tgt_unique * 100, 1),
+                    "in_suggestion":  col in kd.join_keys,
+                })
+        col_scores.sort(key=lambda x: -x["src_uniqueness"])
+
         return jsonify({
-            "ok":                True,
-            "suggested_keys":    kd.join_keys,
-            "key_labels":        {k: get_label(k, custom) for k in kd.join_keys},
-            "detection_method":  kd.detection_method,
-            "confidence":        kd.confidence,
-            "uniqueness_src":    kd.uniqueness_src,
-            "uniqueness_tgt":    kd.uniqueness_tgt,
-            "duplicate_src":     kd.duplicate_src,
-            "duplicate_tgt":     kd.duplicate_tgt,
-            "common_columns":    common,
-            "candidate_tested":  kd.candidate_tested,
+            "ok":               True,
+            "suggested_keys":   kd.join_keys,
+            "key_labels":       {k: get_label(k, custom) for k in kd.join_keys},
+            "detection_method": kd.detection_method,
+            "confidence":       kd.confidence,
+            "uniqueness_src":   round(kd.uniqueness_src * 100, 1),
+            "uniqueness_tgt":   round(kd.uniqueness_tgt * 100, 1),
+            "duplicate_src":    kd.duplicate_src,
+            "duplicate_tgt":    kd.duplicate_tgt,
+            "common_columns":   common,
+            "column_scores":    col_scores,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
