@@ -482,7 +482,8 @@ def run_validation(name, source_path, target_path):
             "display_name":       disp["display_name"],
             "display_mapping":    disp["display_mapping"],
             "is_cross_mapped":    disp["is_cross_mapped"],
-            "mapping_method":     detail.method if detail else "exact",
+            "is_key_field":       fr.is_key_field,          # join key field flag
+            "mapping_method":     detail.method if detail else ("key" if fr.is_key_field else "exact"),
             "mapping_confidence": detail.confidence if detail else 1.0,
             "type":               "numeric" if fr.is_numeric else "string",
             "tolerance":          fr.tolerance_used,
