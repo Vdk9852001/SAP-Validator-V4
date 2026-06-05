@@ -374,6 +374,244 @@ def run_validation(name, source_path, target_path):
             if tmpl_fields:
                 selected_fields    = tmpl_fields
                 template_name_used = active_template
+                log_event(f"{name}: template '{active_template}' ({len(tmpl_fields)} fields)", "info")
+        else:
+            log_event(f"{name}: template '{active_template}' not found", "warn")
+
+    # ── Manual join keys: from config (user set via UI) ───────────────────────
+    manual_join_keys = cfg.get("manual_join_keys", {}).get(name.upper(), [])
+
+    src_mb = Path(source_path).stat().st_size / (1024 * 1024)
+    tgt_mb = Path(target_path).stat().st_size / (1024 * 1024)
+    if src_mb > 50 or tgt_mb > 50:
+        log_event(f"{name}: large files ({src_mb:.1f}MB / {tgt_mb:.1f}MB)", "warn")
+
+    # ── Read headers ──────────────────────────────────────────────────────────
+    try:
+        src_cols, tgt_cols = _read_file_headers(source_path, target_path)
+    except Exception as e:
+        log_event(f"{name}: could not read headers — {e}", "warn")
+        src_cols, tgt_cols = [], []
+
+    # ── Build field mapping ───────────────────────────────────────────────────
+    # Target columns are authoritative; filter by template/selection if active
+    tgt_no_jk = tgt_cols  # key cols stripped later by validator
+    if selected_fields:
+        sel_upper    = set(s.upper() for s in selected_fields)
+        tgt_filtered = [c for c in tgt_no_jk if c in sel_upper] or tgt_no_jk
+    else:
+        tgt_filtered = tgt_no_jk
+
+    src_no_jk = src_cols
+
+    custom_mapping = _read_mapping_file(MAPPING_FILE)
+    if custom_mapping:
+        src_set   = set(src_no_jk)
+        tgt_set   = set(tgt_filtered)
+        field_map = {s: t for s, t in custom_mapping.items()
+                     if s in src_set and t in tgt_set}
+        if field_map:
+            log_event(f"{name}: custom mapping — {len(field_map)} pairs", "info")
+            from core.field_mapper import MappingResult, MappedField
+            mapping_result = MappingResult(
+                mapped_fields=field_map,
+                mapped_details=[MappedField(source_field=s, target_field=t,
+                    method="custom", confidence=1.0,
+                    source_label=get_label(s, custom), target_label=get_label(t, custom))
+                    for s, t in field_map.items()],
+                unmapped_source=[c for c in src_no_jk if c not in field_map],
+                unmapped_target=[c for c in tgt_filtered if c not in field_map.values()],
+                suggested_mappings=[], object_type=name,
+                total_source_fields=len(src_no_jk), total_target_fields=len(tgt_filtered),
+            )
+        else:
+            custom_mapping = {}
+
+    if not custom_mapping:
+        mapping_result = build_field_mapping(
+            source_cols=src_no_jk, target_cols=tgt_filtered,
+            object_type=name, selected_fields=None, custom_labels=custom,
+        )
+        field_map = mapping_result.mapped_fields
+
+    exact_count = sum(1 for d in mapping_result.mapped_details if d.method == "exact")
+    alias_count = sum(1 for d in mapping_result.mapped_details if "alias" in d.method)
+    fuzzy_count = sum(1 for d in mapping_result.mapped_details if d.method == "fuzzy")
+    log_event(
+        f"{name}: {len(field_map)} fields mapped "
+        f"({exact_count} exact, {alias_count} alias, {fuzzy_count} fuzzy)"
+        + (f" via template '{template_name_used}'" if template_name_used else ""),
+        "info",
+    )
+
+    # ── Run validator (composite key, column-only loading) ────────────────────
+    validator = MaterialValidator(
+        field_map=field_map,
+        pass_threshold=pass_threshold,
+        manual_join_keys=manual_join_keys if manual_join_keys else None,
+        custom_labels=custom if custom else None,
+    )
+
+    result          = validator.validate(source_path, target_path, object_name=name)
+    ss              = result.summary_stats
+    business_status = calculate_business_status(result, pass_threshold)
+
+    # Log join key info
+    jk_str = " + ".join(result.join_keys) if result.join_keys else "none"
+    log_event(
+        f"{name}: join keys = [{jk_str}] "
+        f"method={result.key_detection_method} "
+        f"confidence={result.key_confidence} "
+        f"dup_src={result.duplicate_src} dup_tgt={result.duplicate_tgt}",
+        "info" if result.key_confidence in ("high","medium") else "warn",
+    )
+
+    # ── Build field rows ───────────────────────────────────────────────────────
+    field_rows = []
+    for fr in result.field_results:
+        detail = next(
+            (d for d in mapping_result.mapped_details if d.source_field == fr.field_source),
+            None,
+        )
+        disp = get_display(fr.field_source, fr.field_target, custom)
+        field_rows.append({
+            "field":              fr.field_source,
+            "field_label":        disp["source_label"],
+            "field_target":       fr.field_target,
+            "field_target_label": disp["target_label"],
+            "display_name":       disp["display_name"],
+            "display_mapping":    disp["display_mapping"],
+            "is_cross_mapped":    disp["is_cross_mapped"],
+            "mapping_method":     detail.method if detail else "exact",
+            "mapping_confidence": detail.confidence if detail else 1.0,
+            "type":               "numeric" if fr.is_numeric else "string",
+            "tolerance":          fr.tolerance_used,
+            "total":              fr.total_records,
+            "matched":            fr.matched,
+            "mismatched":         fr.mismatched,
+            "miss_source":        fr.missing_in_source,
+            "miss_target":        fr.missing_in_target,
+            "match_pct":          fr.match_pct,
+            "pass_threshold":     fr.pass_threshold,
+            "status":             fr.status,
+            "mismatches":         fr.mismatch_details,
+            "mismatch_count":     len(fr.mismatch_details),
+        })
+
+    # ── Mapping info for dashboard ─────────────────────────────────────────────
+    mapping_info = None
+    if result.mapping:
+        m = result.mapping
+        mapping_info = {
+            # Composite key fields
+            "join_keys":          result.join_keys,
+            "join_key_labels":    {k: get_label(k, custom) for k in result.join_keys},
+            "join_key":           m.join_key,           # backwards compat string
+            "join_key_label":     m.join_key_label,
+            "key_detection_method": result.key_detection_method,
+            "key_confidence":     result.key_confidence,
+            "duplicate_src":      result.duplicate_src,
+            "duplicate_tgt":      result.duplicate_tgt,
+            "duplicate_key_samples": result.duplicate_key_samples,
+            # Field info
+            "matched_fields":     m.matched_fields,
+            "matched_labels":     {f: get_label(f, custom) for f in m.matched_fields},
+            "source_only_fields": mapping_result.unmapped_source,
+            "source_only_labels": {f: get_label(f, custom) for f in mapping_result.unmapped_source},
+            "target_only_fields": mapping_result.unmapped_target,
+            "target_only_labels": {f: get_label(f, custom) for f in mapping_result.unmapped_target},
+            "numeric_fields":     m.numeric_fields,
+            "tolerance_map":      m.tolerance_map,
+            "selected_fields":    selected_fields,
+            "pass_threshold":     pass_threshold,
+        }
+
+    # ── Available fields for Settings ─────────────────────────────────────────
+    sel_set = set(selected_fields) if selected_fields else set()
+    available_fields = []
+    for col in src_cols:
+        tgt_col = field_map.get(col)
+        available_fields.append({
+            "field": col, "label": get_label(col, custom),
+            "in_source": True, "in_target": tgt_col is not None,
+            "target_col": tgt_col or "", "target_label": get_label(tgt_col, custom) if tgt_col else "",
+            "common": tgt_col is not None, "selected": not sel_set or col in sel_set,
+        })
+    for col in tgt_cols:
+        if col not in field_map.values():
+            available_fields.append({
+                "field": col, "label": get_label(col, custom),
+                "in_source": False, "in_target": True, "target_col": col,
+                "target_label": get_label(col, custom), "common": False, "selected": False,
+            })
+
+    ts             = datetime.now().strftime("%Y%m%d_%H%M%S")
+    excel_filename = f"{name}_{ts}.xlsx"
+    excel_path     = REPORTS_DIR / excel_filename
+
+    result_dict = {
+        "name":                   name,
+        "sap_object":             get_object_config(name).get("description", name),
+        "status":                 business_status["status"],
+        "validator_status":       result.overall_status,
+        "field_status":           business_status["field_status"],
+        "record_status":          business_status["record_status"],
+        "business_message":       business_status["message"],
+        "source_file":            Path(source_path).name,
+        "target_file":            Path(target_path).name,
+        "total_source_records":   result.total_source_records,
+        "total_target_records":   result.total_target_records,
+        "records_matched":        result.records_matched,
+        "records_only_in_source": result.records_only_in_source,
+        "records_only_in_target": result.records_only_in_target,
+        "fields_passed":          ss["fields_passed"],
+        "fields_failed":          ss["fields_failed"],
+        "total_fields":           ss["total_fields_validated"],
+        "pass_rate_pct":          ss["pass_rate_pct"],
+        "pass_threshold":         pass_threshold,
+        "selected_fields":        selected_fields,
+        "template_used":          template_name_used,
+        # Composite key
+        "join_keys":              result.join_keys,
+        "key_detection_method":   result.key_detection_method,
+        "key_confidence":         result.key_confidence,
+        "duplicate_src":          result.duplicate_src,
+        "duplicate_tgt":          result.duplicate_tgt,
+        "duplicate_key_samples":  result.duplicate_key_samples,
+        "manual_join_keys":       manual_join_keys,
+        "errors":                 result.errors,
+        "mapping":                mapping_info,
+        "field_mapping_detail":   mapping_result_to_dict(mapping_result),
+        "field_results":          field_rows,
+        "available_fields":       available_fields,
+        "run_at":                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "excel_file":             excel_filename,
+    }
+
+    try:
+        generate_excel_report(result_dict, str(excel_path))
+        cleanup_old_reports()
+    except Exception as e:
+        result_dict["excel_error"] = str(e)
+        log_event(f"Excel failed for {name}: {e}", "error")
+
+    return result_dict
+    cfg            = load_config()
+    pass_threshold = float(cfg.get("pass_threshold", 100.0))
+    custom         = _get_custom_labels()
+
+    # ── Determine field filter: template > manual > all ───────────────────────
+    selected_fields    = cfg.get("selected_fields", [])
+    active_template    = cfg.get("active_template", "")
+    template_name_used = ""
+
+    if active_template:
+        tmpl_path = TEMPLATES_DIR / active_template
+        if tmpl_path.exists():
+            tmpl_fields = _read_template_fields(tmpl_path)
+            if tmpl_fields:
+                selected_fields    = tmpl_fields
+                template_name_used = active_template
                 log_event(
                     f"{name}: using template '{active_template}' "
                     f"({len(tmpl_fields)} fields)",
@@ -1470,6 +1708,126 @@ def api_pairs_delete(name):
         file_states.pop(name.upper(), None)
         log_event(f"Manual pair removed: {name}", "info")
     return jsonify({"ok": True, "removed": removed})
+
+
+# ── Join key routes ────────────────────────────────────────────────────────────
+
+@app.route("/api/join-keys", methods=["GET"])
+def api_join_keys_get():
+    """Get all manually configured join keys (per pair name)."""
+    cfg = load_config()
+    return jsonify(cfg.get("manual_join_keys", {}))
+
+
+@app.route("/api/join-keys/<name>", methods=["POST"])
+def api_join_keys_set(name):
+    """
+    Set manual join keys for a specific pair/table.
+    Body: {"keys": ["MATNR","KSCHL","VKORG"]}
+    Triggers re-validation immediately.
+    """
+    data = request.get_json(force=True)
+    keys = [k.strip().upper() for k in data.get("keys", []) if k.strip()]
+    cfg  = load_config()
+    if "manual_join_keys" not in cfg:
+        cfg["manual_join_keys"] = {}
+    pname = name.upper()
+    if keys:
+        cfg["manual_join_keys"][pname] = keys
+        log_event(f"Manual join keys set for {pname}: {' + '.join(keys)}", "info")
+    else:
+        cfg["manual_join_keys"].pop(pname, None)
+        log_event(f"Manual join keys cleared for {pname} — auto-detection will run", "info")
+    save_config(cfg)
+    # Clear only this pair's result so it re-validates
+    results_store.pop(pname, None)
+    if pname in file_states:
+        file_states[pname]["state"] = "changed"
+    threading.Thread(target=scan_and_validate_all, daemon=True).start()
+    return jsonify({"ok": True, "name": pname, "keys": keys})
+
+
+@app.route("/api/join-keys/<name>", methods=["DELETE"])
+def api_join_keys_clear(name):
+    """Clear manual join keys for a pair — revert to auto-detection."""
+    cfg   = load_config()
+    pname = name.upper()
+    cfg.get("manual_join_keys", {}).pop(pname, None)
+    save_config(cfg)
+    results_store.pop(pname, None)
+    if pname in file_states:
+        file_states[pname]["state"] = "changed"
+    log_event(f"Join keys cleared for {pname} — auto-detection will run", "info")
+    threading.Thread(target=scan_and_validate_all, daemon=True).start()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/join-keys/<name>/detect", methods=["POST"])
+def api_join_keys_detect(name):
+    """
+    Run key detection on the current source/target files for a pair
+    and return the suggested composite key without saving it.
+    Useful for the 'Suggest keys' button in the UI.
+    """
+    pname = name.upper()
+    pairs = discover_pairs()
+    pair  = next((p for p in pairs if p["name"] == pname), None)
+    if not pair or not pair["has_pair"]:
+        return jsonify({"error": f"Pair {pname} not found or missing files"}), 404
+
+    try:
+        from core.key_detector import detect_composite_key
+        import pandas as pd
+
+        def read_cols(path):
+            import csv as csv_mod
+            p = str(path)
+            if p.lower().endswith((".xlsx", ".xls")):
+                import openpyxl
+                wb   = openpyxl.load_workbook(p, read_only=True, data_only=True)
+                ws   = wb.active
+                cols = [str(c.value).strip().upper() for c in next(ws.iter_rows(max_row=1)) if c.value]
+                wb.close()
+                return cols
+            with open(p, encoding="utf-8-sig") as f:
+                return [c.strip().upper() for c in next(csv_mod.reader(f))]
+
+        src_hdrs = read_cols(pair["source_path"])
+        tgt_hdrs = read_cols(pair["target_path"])
+        common   = sorted(set(src_hdrs) & set(tgt_hdrs))
+
+        # Load a sample (max 5000 rows) for uniqueness testing
+        sample = 5000
+        if pair["source_path"].endswith((".xlsx",".xls")):
+            src_df = pd.read_excel(pair["source_path"], dtype=str, nrows=sample)
+        else:
+            src_df = pd.read_csv(pair["source_path"], dtype=str, encoding="utf-8-sig",
+                                 nrows=sample, na_filter=False)
+        if pair["target_path"].endswith((".xlsx",".xls")):
+            tgt_df = pd.read_excel(pair["target_path"], dtype=str, nrows=sample)
+        else:
+            tgt_df = pd.read_csv(pair["target_path"], dtype=str, encoding="utf-8-sig",
+                                 nrows=sample, na_filter=False)
+        src_df.columns = src_df.columns.str.strip().str.upper()
+        tgt_df.columns = tgt_df.columns.str.strip().str.upper()
+
+        kd = detect_composite_key(src_df, tgt_df, object_name=pname)
+        custom = _get_custom_labels()
+        return jsonify({
+            "ok":                True,
+            "suggested_keys":    kd.join_keys,
+            "key_labels":        {k: get_label(k, custom) for k in kd.join_keys},
+            "detection_method":  kd.detection_method,
+            "confidence":        kd.confidence,
+            "uniqueness_src":    kd.uniqueness_src,
+            "uniqueness_tgt":    kd.uniqueness_tgt,
+            "duplicate_src":     kd.duplicate_src,
+            "duplicate_tgt":     kd.duplicate_tgt,
+            "common_columns":    common,
+            "candidate_tested":  kd.candidate_tested,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Labels / reports / downloads ─────────────────────────────────────────────────
