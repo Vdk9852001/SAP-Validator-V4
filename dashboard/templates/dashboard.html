@@ -142,8 +142,28 @@ tr.data-row:hover td{background:var(--surface2)}
 .bar-f{height:100%;border-radius:3px}
 .bar-v{font-size:11px;font-weight:700;min-width:38px;text-align:right}
 .bdg{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.key-field-row td{background:var(--accent-light) !important}
+.key-field-row:hover td{background:rgba(79,70,229,.12) !important}
+.bdg-key{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.3);
+  font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.key-group-hdr td{background:var(--surface2);font-size:10px;font-weight:700;
+  color:var(--accent);text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;
+  border-top:2px solid var(--accent)}
+.data-group-hdr td{background:var(--surface2);font-size:10px;font-weight:700;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;
+  border-top:2px solid var(--border)}
 .b-pass{background:var(--pass-bg);color:var(--pass)}
 .b-fail{background:var(--fail-bg);color:var(--fail)}
+.key-field-row td{background:rgba(79,70,229,.06) !important}
+.key-field-row:hover td{background:rgba(79,70,229,.11) !important}
+.bdg-key{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.3);
+  font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.key-group-hdr td{background:var(--accent-light);font-size:10px;font-weight:700;
+  color:var(--accent);text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;
+  border-top:2px solid var(--accent)}
+.data-group-hdr td{background:var(--surface2);font-size:10px;font-weight:700;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;
+  border-top:1px solid var(--border)}
 .exp-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;
   cursor:pointer;padding:3px 9px;border-radius:6px;transition:all .15s;
   display:inline-flex;align-items:center;gap:4px;font-weight:500}
@@ -971,13 +991,30 @@ function renderDetail(r){
       '<div class="map-box"><h5>Target-only (not validated)</h5>'+to2+'</div>'+
       (crossHtml?crossHtml:'')+'</div>';
   }
-  var frows=r.field_results.map(function(fr,i){
+  // Separate key fields from data fields for grouped display
+  var keyFields  = r.field_results.filter(function(fr){return  fr.is_key_field;});
+  var dataFields = r.field_results.filter(function(fr){return !fr.is_key_field;});
+  var allFields  = keyFields.concat(dataFields);
+  var prevGroup  = null;
+
+  var frows=allFields.map(function(fr,i){
     var pct=fr.match_pct,fthr=fr.pass_threshold||thr;
     var bc=pct>=fthr?'var(--pass)':pct>=(fthr*0.8)?'var(--warn)':'var(--fail)';
-    var stBadge=fr.status==='PASS'?'<span class="bdg b-pass">PASS</span>':'<span class="bdg b-fail">FAIL</span>';
-    var typeTag=fr.type==='numeric'
-      ?'<span class="tn">Numeric +/-'+fr.tolerance+'</span>'
-      :'<span class="ts">Text</span>';
+    var isKey=fr.is_key_field||false;
+    var groupHeader='';
+    var curGroup=isKey?'key':'data';
+    if(curGroup!==prevGroup){
+      prevGroup=curGroup;
+      groupHeader=isKey
+        ?'<tr class="key-group-hdr"><td colspan="8">Join Key Fields (used for record matching)</td></tr>'
+        :'<tr class="data-group-hdr"><td colspan="8">Data Fields (validated for value accuracy)</td></tr>';
+    }
+    var stBadge=isKey?'<span class="bdg-key">KEY</span>':
+      (fr.status==='PASS'?'<span class="bdg b-pass">PASS</span>':'<span class="bdg b-fail">FAIL</span>');
+    var typeTag=isKey?'<span class="bdg-key" style="font-size:10px">Join Key</span>':
+      (fr.type==='numeric'
+        ?'<span class="tn">Numeric +/-'+fr.tolerance+'</span>'
+        :'<span class="ts">Text</span>');
     var displayName=fr.display_name||fr.field_label||fr.field;
     var isCross=fr.is_cross_mapped||false;
     var techLine=isCross
@@ -1015,7 +1052,8 @@ function renderDetail(r){
     var detRow=hasMiss
       ?'<tr class="miss-row" id="md-'+i+'" onclick="event.stopPropagation()"><td colspan="8">'+missHtml+'</td></tr>'
       :'';
-    return '<tr class="data-row">'+
+    return groupHeader+'<tr class="data-row'+(isKey?' key-field-row':'')+'">'+
+
       '<td>'+
         '<div class="fl">'+esc(displayName)+'</div>'+techLine+methodBadge+
         (expBtn?'<div style="margin-top:5px">'+expBtn+'</div>':'')+
