@@ -1,2037 +1,1800 @@
-"""
-Genpact SAP Migration Validator — Dashboard V4
-Run:  python dashboard/app.py
-Open: http://localhost:5000
-"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>SAP Migration Validator</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f4f6fa;--surface:#fff;--surface2:#f0f2f7;
+  --border:#dde1ec;--border2:#c8cde0;--text:#1a1f36;--muted:#6b728e;
+  --pass:#16a34a;--pass-bg:#dcfce7;--fail:#dc2626;--fail-bg:#fee2e2;
+  --warn:#d97706;--warn-bg:#fef3c7;--info:#2563eb;--info-bg:#dbeafe;
+  --accent:#4f46e5;--accent-light:#eef2ff;--accent-mid:rgba(79,70,229,.12);
+  --shadow:0 1px 4px rgba(0,0,0,.08);--shadow-md:0 4px 16px rgba(0,0,0,.1);
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;
+  display:flex;align-items:center;justify-content:space-between;height:54px;gap:10px;box-shadow:var(--shadow)}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#4f46e5,#7c3aed);
+  border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-icon svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2}
+.logo-text{font-size:15px;font-weight:700;color:var(--text)}
+.logo-text span{color:var(--accent)}
+.logo-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.hdr-r{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.hbtn{border:none;padding:6px 14px;border-radius:7px;font-size:12px;cursor:pointer;font-weight:500;
+  transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.hbtn-accent{background:var(--accent);color:#fff;box-shadow:0 2px 6px rgba(79,70,229,.3)}
+.hbtn-accent:hover:not(:disabled){background:#4338ca}
+.hbtn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.hbtn-ghost:hover:not(:disabled){background:var(--border)}
+.hbtn:disabled{opacity:.4;cursor:default}
+.last-scan{font-size:11px;color:var(--muted)}
+.thr-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;
+  background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.2)}
+.tmpl-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;
+  background:var(--pass-bg);color:var(--pass);border:1px solid rgba(22,163,74,.3)}
+.layout{display:grid;grid-template-columns:270px 1fr;height:calc(100vh - 54px)}
+aside{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sb-head{padding:14px 15px 6px;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+#table-list{flex:1;overflow-y:auto}
+.sb-item{display:flex;align-items:center;padding:9px 15px;cursor:pointer;
+  border-left:3px solid transparent;transition:all .13s;gap:8px}
+.sb-item:hover{background:var(--surface2)}
+.sb-item.active{background:var(--accent-light);border-left-color:var(--accent)}
+.sb-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0;font-size:14px}
+.sb-icon-tbl{background:var(--accent-light);color:var(--accent)}
+.sb-icon-warn{background:var(--warn-bg);color:var(--warn)}
+.tname{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.tsub{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;flex-shrink:0}
+.sp-new{background:var(--info-bg);color:var(--info)}
+.sp-val{background:var(--accent-light);color:var(--accent);animation:blink .8s infinite}
+.sp-pass{background:var(--pass-bg);color:var(--pass)}
+.sp-warn{background:var(--warn-bg);color:var(--warn)}
+.sp-fail{background:var(--fail-bg);color:var(--fail)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.sb-unmatched{padding:8px 15px;font-size:11px;color:var(--warn);display:flex;align-items:center;
+  gap:7px;cursor:pointer;transition:background .13s;border-left:3px solid transparent}
+.sb-unmatched:hover{background:var(--warn-bg);border-left-color:var(--warn)}
+.sb-footer{border-top:1px solid var(--border);padding:8px;display:flex;gap:6px;background:var(--surface)}
+.ub{flex:1;font-size:11px;padding:6px 4px;border:1px solid var(--border);border-radius:7px;
+  background:transparent;color:var(--muted);text-align:center;cursor:pointer;transition:all .13s;font-weight:500}
+.ub:hover{background:var(--accent-light);color:var(--accent);border-color:rgba(79,70,229,.3)}
+main{overflow-y:auto;padding:22px}
+#welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:20px;text-align:center}
+#welcome h2{font-size:22px;font-weight:700}
+#welcome h2 span{color:var(--accent)}
+#welcome p{color:var(--muted);font-size:13px;max-width:520px;line-height:1.7}
+.upload-zone{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:22px;display:grid;grid-template-columns:1fr 1fr;gap:14px;min-width:480px;box-shadow:var(--shadow)}
+.upload-box{background:var(--surface2);border:2px dashed var(--border);border-radius:10px;
+  padding:18px;text-align:center;transition:border-color .15s}
+.upload-box:hover{border-color:var(--accent)}
+.upload-box h4{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.06em;margin-bottom:10px}
+.ubtn{display:block;background:var(--accent);color:#fff;border:none;padding:8px 16px;
+  border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;width:100%;margin-bottom:7px}
+.ubtn:hover{background:#4338ca}
+.uhint{font-size:10px;color:var(--muted);line-height:1.5}
+.ustatus{font-size:11px;margin-top:5px;min-height:15px}
+#detail{display:none}
+.det-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;gap:12px}
+.det-title{font-size:18px;font-weight:700}
+.det-meta{font-size:11px;color:var(--muted);margin-top:3px}
+.det-right{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.st-pill{font-size:12px;font-weight:700;padding:5px 16px;border-radius:20px}
+.pill-pass{background:var(--pass-bg);color:var(--pass)}
+.pill-warn{background:var(--warn-bg);color:var(--warn)}
+.pill-fail{background:var(--fail-bg);color:var(--fail)}
+.pill-err{background:var(--warn-bg);color:var(--warn)}
+.dl-btn{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.25);
+  padding:6px 13px;border-radius:7px;font-size:12px;font-weight:600;text-decoration:none;
+  display:inline-flex;align-items:center;gap:5px;transition:background .15s}
+.dl-btn:hover{background:rgba(79,70,229,.18)}
+.dl-btn.disabled{opacity:.4;pointer-events:none}
+.info-bar{display:inline-flex;align-items:center;gap:7px;background:var(--accent-light);
+  border:1px solid rgba(79,70,229,.2);border-radius:7px;padding:5px 12px;
+  font-size:11px;color:var(--accent);margin-bottom:10px;font-weight:500}
+.tmpl-bar{display:inline-flex;align-items:center;gap:7px;background:var(--pass-bg);
+  border:1px solid rgba(22,163,74,.25);border-radius:7px;padding:5px 12px;
+  font-size:11px;color:var(--pass);margin-bottom:10px;font-weight:500;margin-left:8px}
+.banner{display:flex;align-items:flex-start;gap:9px;padding:10px 14px;border-radius:8px;
+  margin-bottom:12px;font-size:12px;line-height:1.55}
+.bn-val{background:var(--accent-light);border:1px solid rgba(79,70,229,.2);color:var(--accent)}
+.bn-chg{background:var(--warn-bg);border:1px solid rgba(217,119,6,.25);color:var(--warn)}
+.bn-pass{background:var(--pass-bg);border:1px solid rgba(22,163,74,.25);color:var(--pass)}
+.bn-fail{background:var(--fail-bg);border:1px solid rgba(220,38,38,.25);color:var(--fail)}
+.spinner{width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;
+  border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;margin-top:1px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:20px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:13px 14px;box-shadow:var(--shadow)}
+.card .n{font-size:22px;font-weight:700}
+.card .l{font-size:10px;color:var(--muted);margin-top:2px;font-weight:500}
+.card.ok .n{color:var(--pass)}
+.card.warn .n{color:var(--fail)}
+.card.blue .n{color:var(--info)}
+.sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.07em;margin:20px 0 10px;display:flex;align-items:center;gap:7px}
+.sec::after{content:'';flex:1;height:1px;background:var(--border)}
+.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  overflow:hidden;margin-bottom:22px;box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--surface2);color:var(--muted);font-size:10px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;padding:9px 12px;text-align:left;
+  border-bottom:1px solid var(--border)}
+td{padding:9px 12px;border-top:1px solid var(--border)}
+tr.data-row:hover td{background:var(--surface2)}
+.fl{font-weight:600;color:var(--text)}
+.ft{font-size:10px;color:var(--muted);margin-top:2px}
+.tn{font-size:10px;color:var(--info);font-weight:600;background:var(--info-bg);
+  padding:1px 6px;border-radius:4px;display:inline-block}
+.ts{font-size:10px;color:var(--muted)}
+.bar-w{display:flex;align-items:center;gap:7px}
+.bar-bg{height:5px;border-radius:3px;background:var(--border);flex:1}
+.bar-f{height:100%;border-radius:3px}
+.bar-v{font-size:11px;font-weight:700;min-width:38px;text-align:right}
+.bdg{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.key-field-row td{background:var(--accent-light) !important}
+.key-field-row:hover td{background:rgba(79,70,229,.12) !important}
+.bdg-key{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.3);
+  font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.key-group-hdr td{background:var(--surface2);font-size:10px;font-weight:700;
+  color:var(--accent);text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;
+  border-top:2px solid var(--accent)}
+.data-group-hdr td{background:var(--surface2);font-size:10px;font-weight:700;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;
+  border-top:2px solid var(--border)}
+.b-pass{background:var(--pass-bg);color:var(--pass)}
+.b-fail{background:var(--fail-bg);color:var(--fail)}
+.key-field-row td{background:rgba(79,70,229,.06) !important}
+.key-field-row:hover td{background:rgba(79,70,229,.11) !important}
+.bdg-key{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.3);
+  font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.key-group-hdr td{background:var(--accent-light);font-size:10px;font-weight:700;
+  color:var(--accent);text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;
+  border-top:2px solid var(--accent)}
+.data-group-hdr td{background:var(--surface2);font-size:10px;font-weight:700;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;
+  border-top:1px solid var(--border)}
+.exp-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;
+  cursor:pointer;padding:3px 9px;border-radius:6px;transition:all .15s;
+  display:inline-flex;align-items:center;gap:4px;font-weight:500}
+.exp-btn:hover,.exp-btn.open{background:var(--fail-bg);color:var(--fail);
+  border-color:rgba(220,38,38,.3)}
+.exp-btn .arr{display:inline-block;transition:transform .18s;font-size:9px}
+.exp-btn.open .arr{transform:rotate(90deg)}
+.miss-row{display:none}
+.miss-row.open{display:table-row}
+.miss-row td{padding:0;background:var(--surface2) !important}
+.miss-inner{padding:10px 14px 14px 22px}
+.miss-inner table{width:100%;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)}
+.miss-inner th{background:var(--fail-bg);color:var(--fail);font-size:10px;border-bottom:1px solid rgba(220,38,38,.2)}
+.miss-inner td{background:var(--surface);border-top:1px solid var(--border)}
+.dold{color:var(--fail);font-weight:600}
+.dnew{color:var(--pass);font-weight:600}
+.more-note{font-size:10px;color:var(--muted);padding:6px 10px;
+  background:var(--surface2);border-top:1px solid var(--border)}
+.map-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.map-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:12px 14px;box-shadow:var(--shadow)}
+.map-box h5{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.06em;margin-bottom:9px}
+.mtag{display:inline-flex;flex-direction:column;background:var(--surface2);
+  border:1px solid var(--border);border-radius:6px;padding:3px 9px;margin:2px;
+  font-size:11px;line-height:1.4;font-weight:500}
+.mtag small{font-size:9px;color:var(--muted);font-weight:400}
+.mtag.num{border-color:rgba(37,99,235,.3);background:var(--info-bg);color:var(--info)}
+.mtag.w{border-color:rgba(217,119,6,.3);background:var(--warn-bg);color:var(--warn)}
+.mtag.cross{border-color:rgba(79,70,229,.3);background:var(--accent-light);color:var(--accent)}
+.jk-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)}
+.jk-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.jk-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.jk-keys{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:6px}
+.jk-key{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.25);
+  border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:3px}
+.jk-key small{font-size:9px;color:var(--muted);font-weight:400}
+.jk-plus{color:var(--muted);font-size:14px;font-weight:700;padding:0 2px}
+.jk-meta{font-size:10px;color:var(--muted);margin-top:6px;display:flex;gap:12px;flex-wrap:wrap}
+.jk-conf-high{color:var(--pass);font-weight:600}
+.jk-conf-medium{color:var(--warn);font-weight:600}
+.jk-conf-low{color:var(--fail);font-weight:600}
+.jk-conf-manual{color:var(--accent);font-weight:600}
+.jk-edit-btn{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.25);
+  padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0}
+.jk-edit-btn:hover{background:rgba(79,70,229,.2)}
+.dup-panel{background:var(--warn-bg);border:1px solid rgba(217,119,6,.25);border-radius:8px;
+  padding:9px 13px;margin-top:8px;font-size:11px;color:var(--warn);line-height:1.5}
+.dup-samples{margin-top:6px;background:var(--surface);border:1px solid rgba(217,119,6,.2);
+  border-radius:6px;overflow:hidden}
+.dup-samples th{background:var(--warn-bg);color:var(--warn);font-size:10px;font-weight:700;
+  padding:5px 9px;text-align:left;border-bottom:1px solid rgba(217,119,6,.2)}
+.dup-samples td{padding:5px 9px;border-top:1px solid var(--border);font-family:monospace;font-size:10px}
+.jk-col-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;
+  max-height:220px;overflow-y:auto;background:var(--surface2);
+  border:1px solid var(--border);border-radius:8px;padding:8px;margin:8px 0}
+.jk-col-item{display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:5px;cursor:pointer}
+.jk-col-item:hover{background:var(--border)}
+.jk-col-item input{accent-color:var(--accent);cursor:pointer;width:13px;height:13px;flex-shrink:0}
+.jk-col-item label{font-size:11px;color:var(--text);font-weight:500;cursor:pointer;line-height:1.3}
+.jk-col-item small{font-size:9px;color:var(--muted)}
+.jk-selected-strip{display:flex;gap:5px;flex-wrap:wrap;min-height:30px;align-items:center;
+  background:var(--accent-light);border:1px solid rgba(79,70,229,.2);
+  border-radius:7px;padding:6px 10px;margin-bottom:10px}
+.jk-sel-tag{background:var(--accent);color:#fff;border-radius:5px;
+  padding:2px 8px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px}
+.jk-sel-tag button{background:none;border:none;color:rgba(255,255,255,.7);
+  cursor:pointer;font-size:13px;line-height:1;padding:0 0 1px 0}
+.jk-sel-tag button:hover{color:#fff}
+.jk-suggest-box{background:var(--pass-bg);border:1px solid rgba(22,163,74,.25);
+  border-radius:7px;padding:9px 12px;font-size:11px;color:var(--pass);margin-bottom:10px;line-height:1.6}
+/* Join key panel */
+.jk-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)}
+.jk-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.jk-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.jk-keys{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.jk-key{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.25);
+  border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px}
+.jk-key small{font-size:9px;color:var(--muted);font-weight:400}
+.jk-plus{color:var(--muted);font-size:14px;font-weight:700}
+.jk-meta{font-size:10px;color:var(--muted);margin-top:6px;display:flex;gap:12px;flex-wrap:wrap}
+.jk-meta span{display:flex;align-items:center;gap:3px}
+.jk-conf-high{color:var(--pass);font-weight:600}
+.jk-conf-medium{color:var(--warn);font-weight:600}
+.jk-conf-low{color:var(--fail);font-weight:600}
+.jk-conf-manual{color:var(--accent);font-weight:600}
+.jk-edit-btn{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.25);
+  padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;transition:background .13s}
+.jk-edit-btn:hover{background:rgba(79,70,229,.2)}
+.dup-panel{background:var(--warn-bg);border:1px solid rgba(217,119,6,.25);border-radius:9px;
+  padding:10px 14px;margin-top:8px;font-size:11px;color:var(--warn)}
+.dup-panel strong{font-weight:700}
+.dup-samples{margin-top:6px;background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;overflow:hidden;font-size:11px}
+.dup-samples th{background:var(--warn-bg);color:var(--warn);font-size:10px;font-weight:700;padding:5px 9px;text-align:left}
+.dup-samples td{padding:5px 9px;border-top:1px solid var(--border);font-family:monospace}
+/* Join key modal */
+.jk-col-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;
+  max-height:220px;overflow-y:auto;background:var(--surface2);
+  border:1px solid var(--border);border-radius:8px;padding:8px;margin:8px 0}
+.jk-col-item{display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:5px;cursor:pointer}
+.jk-col-item:hover{background:var(--border)}
+.jk-col-item input{accent-color:var(--accent);cursor:pointer;width:13px;height:13px;flex-shrink:0}
+.jk-col-item label{font-size:11px;color:var(--text);font-weight:500;cursor:pointer}
+.jk-col-item small{font-size:9px;color:var(--muted)}
+.jk-selected-list{display:flex;gap:5px;flex-wrap:wrap;min-height:28px;
+  background:var(--accent-light);border:1px solid rgba(79,70,229,.2);
+  border-radius:7px;padding:6px 10px;margin-bottom:10px}
+.jk-sel-tag{background:var(--accent);color:#fff;border-radius:5px;
+  padding:2px 8px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px}
+.jk-sel-tag button{background:none;border:none;color:rgba(255,255,255,.7);
+  cursor:pointer;font-size:12px;line-height:1;padding:0}
+.jk-sel-tag button:hover{color:#fff}
+.jk-suggest-row{background:var(--pass-bg);border:1px solid rgba(22,163,74,.25);
+  border-radius:7px;padding:8px 12px;font-size:11px;color:var(--pass);margin-bottom:10px}
+.err-box{background:var(--fail-bg);border:1px solid rgba(220,38,38,.3);border-radius:9px;
+  padding:11px 14px;color:var(--fail);font-size:12px;margin-bottom:16px}
+#toast-container{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column-reverse;gap:8px;z-index:999}
+.toast{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 16px;
+  font-size:12px;max-width:320px;box-shadow:var(--shadow-md);display:flex;align-items:flex-start;
+  gap:8px;animation:sli .22s ease}
+.toast.rm{animation:slo .22s ease forwards}
+.toast-m{flex:1;line-height:1.5}
+.toast.info{border-left:3px solid var(--info)}
+.toast.success{border-left:3px solid var(--pass)}
+.toast.warn{border-left:3px solid var(--warn)}
+.toast.error{border-left:3px solid var(--fail)}
+@keyframes sli{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+@keyframes slo{to{opacity:0;transform:translateX(16px)}}
+.overlay{position:fixed;inset:0;background:rgba(15,20,40,.45);display:none;
+  align-items:center;justify-content:center;z-index:200}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:600px;
+  max-height:87vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-md)}
+.modal-hd{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surface2)}
+.modal-hd h3{font-size:14px;font-weight:700}
+.mclose{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;
+  line-height:1;padding:0 3px;border-radius:5px;transition:all .13s}
+.mclose:hover{background:var(--border);color:var(--text)}
+.modal-body{overflow-y:auto;padding:18px 20px;flex:1}
+.le{display:flex;gap:9px;padding:7px 10px;border-radius:7px;font-size:11px;
+  margin-bottom:4px;border-left:3px solid transparent}
+.le.info{border-color:var(--info);background:var(--info-bg)}
+.le.success{border-color:var(--pass);background:var(--pass-bg)}
+.le.warn{border-color:var(--warn);background:var(--warn-bg)}
+.le.error{border-color:var(--fail);background:var(--fail-bg)}
+.le-ts{color:var(--muted);flex-shrink:0;font-family:monospace;font-size:10px;padding-top:1px}
+.le-m{flex:1;line-height:1.45}
+.rep-row{display:flex;align-items:center;padding:9px 12px;border-radius:8px;margin-bottom:5px;
+  background:var(--surface2);font-size:12px;gap:10px;border:1px solid var(--border)}
+.rep-nm{font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rep-mt{font-size:10px;color:var(--muted);white-space:nowrap}
+.rep-dl{background:var(--accent-light);color:var(--accent);border:1px solid rgba(79,70,229,.25);
+  padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none}
+.rep-dl:hover{background:rgba(79,70,229,.2)}
+.s-section{margin-bottom:20px}
+.s-section h4{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.06em;margin-bottom:10px}
+.f-row{display:flex;flex-direction:column;gap:4px;margin-bottom:11px}
+.f-row label{font-size:11px;color:var(--muted);font-weight:500}
+.f-inp{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:7px 11px;border-radius:7px;font-size:12px;width:100%;outline:none;transition:border-color .15s}
+.f-inp:focus{border-color:var(--accent);background:var(--surface)}
+.thr-row{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.thr-row input[type=range]{flex:1;accent-color:var(--accent)}
+.thr-val{font-size:16px;font-weight:700;color:var(--accent);min-width:44px;text-align:right}
+.thr-note{font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5}
+.save-btn{background:var(--accent);color:#fff;border:none;padding:7px 18px;border-radius:7px;
+  font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
+.save-btn:hover{background:#4338ca}
+.s-status{font-size:11px;margin-top:7px;min-height:16px;line-height:1.5}
+.divider{border:none;border-top:1px solid var(--border);margin:18px 0}
+/* Template cards */
+.tmpl-card{background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+  padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.tmpl-card.is-active{background:#f0fdf4;border-color:rgba(22,163,74,.3)}
+.tmpl-info{flex:1;min-width:0}
+.tmpl-name{font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tmpl-meta{font-size:10px;color:var(--muted);margin-top:3px}
+.tmpl-fields-preview{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.5}
+.active-badge{background:var(--pass-bg);color:var(--pass);font-size:10px;font-weight:700;
+  padding:1px 8px;border-radius:20px;border:1px solid rgba(22,163,74,.3)}
+.tmpl-actions{display:flex;gap:6px;flex-shrink:0}
+.t-btn{font-size:11px;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;
+  border:1px solid var(--border);background:var(--surface);color:var(--muted);transition:all .13s}
+.t-btn:hover{background:var(--surface2)}
+.t-btn.activate{background:var(--accent);color:#fff;border-color:var(--accent)}
+.t-btn.activate:hover{background:#4338ca}
+.t-btn.deactivate{background:var(--warn-bg);color:var(--warn);border-color:rgba(217,119,6,.3)}
+.t-btn.del{background:var(--fail-bg);color:var(--fail);border-color:rgba(220,38,38,.3)}
+/* Field selector */
+.fs-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px}
+.fs-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.fs-btns{display:flex;gap:5px;flex-wrap:wrap}
+.fs-btn{font-size:11px;padding:3px 10px;border:1px solid var(--border);border-radius:6px;
+  background:transparent;color:var(--muted);cursor:pointer;transition:all .12s}
+.fs-btn:hover{background:var(--accent-light);color:var(--accent);border-color:rgba(79,70,229,.3)}
+.fs-count{font-size:11px;color:var(--muted);white-space:nowrap;font-weight:500}
+.fs-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;max-height:230px;overflow-y:auto;
+  background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px}
+.fc-item{display:flex;align-items:flex-start;gap:7px;padding:5px 7px;border-radius:5px;
+  cursor:pointer;transition:background .12s}
+.fc-item:hover{background:var(--border)}
+.fc-item input[type=checkbox]{accent-color:var(--accent);cursor:pointer;width:13px;height:13px;
+  margin-top:2px;flex-shrink:0}
+.fc-label{font-size:11px;color:var(--text);flex:1;line-height:1.3;font-weight:500}
+.fc-tech{font-size:9px;color:var(--muted)}
+.lbl-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.lbl-btn{background:var(--surface2);color:var(--muted);border:1px solid var(--border);
+  padding:6px 12px;border-radius:7px;font-size:11px;cursor:pointer;font-weight:500}
+.lbl-btn:hover{background:var(--border);color:var(--text)}
+.samp-dl{color:var(--accent);font-size:11px;font-weight:600;text-decoration:none;
+  background:var(--accent-light);border:1px solid rgba(79,70,229,.25);padding:5px 12px;border-radius:7px}
+.samp-dl:hover{background:rgba(79,70,229,.2)}
+.empty-msg{color:var(--muted);font-size:13px;text-align:center;padding:26px}
+.scanning-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);
+  display:inline-block;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+input[type=file]{display:none}
+select{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:7px 9px;border-radius:7px;font-size:12px;outline:none;width:100%;transition:border-color .15s}
+select:focus{border-color:var(--accent)}
+code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px;
+  color:var(--accent);border:1px solid var(--border)}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head>
+<body>
 
-import sys
-import csv as csv_mod
-import threading
-import time
-import json
-import io
-from pathlib import Path
-from datetime import datetime
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/>
+        <path d="M4 6v4c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/>
+        <path d="M4 10v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/>
+        <path d="M4 14v4c0 1.66 3.58 3 8 3s8-1.34 8-3v-4"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">Genpact <span>SAP</span> Validator</div>
+      <div class="logo-sub">Post-Load Migration Validation</div>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <span id="scan-ind" style="display:none"><span class="scanning-dot"></span></span>
+    <span class="last-scan" id="last-scan">Not scanned yet</span>
+    <span class="thr-badge" id="thr-badge">Threshold: 100%</span>
+    <span class="tmpl-badge" id="tmpl-badge" style="display:none">📋 Template active</span>
+    <button class="hbtn hbtn-ghost" onclick="openLog()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>Log
+    </button>
+    <button class="hbtn hbtn-ghost" onclick="openReports()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>Reports
+    </button>
+    <button class="hbtn hbtn-ghost" onclick="openSettings()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.07 4.93l-1.41 1.41M16.95 16.95l1.41 1.41M4.93 4.93l1.41 1.41M7.05 16.95l-1.41 1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/>
+      </svg>Settings
+    </button>
+    <button class="hbtn hbtn-accent" id="scan-btn" onclick="triggerScan()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="23 4 23 10 17 10"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>Scan Now
+    </button>
+  </div>
+</header>
 
-from flask import Flask, render_template, jsonify, send_file, request, Response
-from werkzeug.utils import secure_filename
+<div class="layout">
+  <aside>
+    <div class="sb-head">Tables</div>
+    <div id="table-list"></div>
+    <div style="flex:1"></div>
+    <div class="sb-footer">
+      <div class="ub" onclick="openUploadModal('source')">⬆ Source</div>
+      <div class="ub" onclick="openUploadModal('target')">⬆ Target</div>
+      <div class="ub" onclick="openPairManager()">⇌ Pairs</div>
+    </div>
+  </aside>
+  <main>
+    <div id="welcome">
+      <h2>Genpact <span>SAP</span> Validator</h2>
+      <p>Upload source and target files to begin validation.
+         Use <b>Settings → Field Templates</b> to upload a CSV listing exactly
+         which fields to check. Use <b>Pairs</b> to link files with different names.</p>
+      <div class="upload-zone">
+        <div class="upload-box">
+          <h4>⬆ Source files</h4>
+          <button class="ubtn" onclick="openUploadModal('source')">Browse &amp; Upload</button>
+          <div class="uhint">CSV or XLSX · same filename = auto-pair</div>
+          <div class="ustatus" id="src-st"></div>
+        </div>
+        <div class="upload-box">
+          <h4>⬆ Target files</h4>
+          <button class="ubtn" onclick="openUploadModal('target')">Browse &amp; Upload</button>
+          <div class="uhint">CSV or XLSX · different name? use Pairs</div>
+          <div class="ustatus" id="tgt-st"></div>
+        </div>
+      </div>
+      <button class="save-btn" style="background:var(--surface2);color:var(--accent);
+          border:1px solid rgba(79,70,229,.3);font-size:12px;padding:8px 22px"
+          onclick="openPairManager()">⇌ Manage file pairs</button>
+    </div>
+    <div id="detail"></div>
+  </main>
+</div>
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.validator    import MaterialValidator
-from core.reporter     import generate_excel_report
-from core.field_labels import (
-    get_label, load_custom_labels, enrich_field_rows,
-    get_display, SAP_FIELD_LABELS
-)
-from core.field_mapper  import build_field_mapping, mapping_result_to_dict
-from core.object_config import get_object_config, SAP_OBJECT_CONFIG
+<!-- Join Key Selector Modal -->
+<div class="overlay" id="jk-modal">
+  <div class="modal" style="width:660px">
+    <div class="modal-hd">
+      <h3>Join Key Selection &mdash; <span id="jk-modal-name" style="color:var(--accent)"></span></h3>
+      <button class="mclose" onclick="closeModal('jk-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
 
-app = Flask(__name__)
+      <div style="background:var(--accent-light);border:1px solid rgba(79,70,229,.2);border-radius:9px;
+          padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--accent);line-height:1.7">
+        <b>How join keys work:</b> Select the columns that uniquely identify each record.
+        For condition records select <b>MATNR + KSCHL + EKORG</b> so that
+        MATNR=1234/KSCHL=PB00/EKORG=CNG1 and MATNR=1234/KSCHL=PB00/EKORG=USG1 are treated
+        as two separate records. The system never hardcodes keys &mdash; you always choose.
+      </div>
 
-BASE_DIR      = Path(__file__).parent.parent
-REPORTS_DIR   = BASE_DIR / "reports"
-CONFIG_FILE   = BASE_DIR / "config.json"
-LABELS_FILE   = BASE_DIR / "custom_labels.csv"
-MAPPING_FILE  = BASE_DIR / "custom_mapping.csv"   # user-defined source->target pairs
-TEMPLATES_DIR = BASE_DIR / "templates"
+      <!-- Current selection strip -->
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
+          letter-spacing:.06em;margin-bottom:5px">Selected join keys (in order)</div>
+      <div class="jk-selected-strip" id="jk-selected-strip">
+        <span style="font-size:11px;color:var(--muted);font-style:italic">No keys selected yet</span>
+      </div>
 
-REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+      <!-- Uniqueness preview -->
+      <div id="jk-uniqueness-bar" style="display:none;background:var(--surface2);border:1px solid var(--border);
+          border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:11px;display:flex;gap:14px;flex-wrap:wrap">
+        <span>Composite key uniqueness:</span>
+        <span>Source: <b id="jk-u-src">-</b></span>
+        <span>Target: <b id="jk-u-tgt">-</b></span>
+        <span id="jk-u-note" style="color:var(--pass);font-weight:600"></span>
+      </div>
 
-DEFAULT_CONFIG = {
-    "source_dir":      str(BASE_DIR / "data" / "source"),
-    "target_dir":      str(BASE_DIR / "data" / "target"),
-    "pass_threshold":  100.0,
-    "selected_fields": [],
-    "manual_pairs":    [],
-    "active_template": "",
+      <!-- Auto-suggest -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="save-btn" style="font-size:11px;padding:5px 14px;background:var(--pass)"
+                onclick="suggestJoinKeys()">Auto-suggest keys</button>
+        <span id="jk-suggest-status" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div id="jk-suggest-box" style="display:none;background:var(--pass-bg);border:1px solid rgba(22,163,74,.25);
+          border-radius:7px;padding:9px 13px;font-size:11px;color:var(--pass);margin-bottom:10px;line-height:1.7"></div>
+
+      <!-- Column list -->
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
+          letter-spacing:.06em;margin-bottom:5px">
+        Common columns in both files
+        <span id="jk-col-count" style="font-weight:400;text-transform:none;color:var(--muted)"></span>
+      </div>
+      <input type="text" id="jk-search" class="f-inp"
+             style="font-size:11px;padding:6px 9px;margin-bottom:7px"
+             placeholder="Search columns by name or label..." oninput="filterJkCols()">
+      <div class="jk-col-grid" id="jk-col-grid">
+        <div style="color:var(--muted);font-size:11px;grid-column:1/-1;padding:8px">Loading...</div>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="save-btn" onclick="saveJoinKeys()">Apply &amp; Re-validate</button>
+        <button class="save-btn" style="background:var(--warn-bg);color:var(--warn);
+            border:1px solid rgba(217,119,6,.3)" onclick="clearJoinKeys()">
+          Clear (let system suggest)
+        </button>
+        <button onclick="closeModal('jk-modal')"
+                style="background:var(--surface2);border:1px solid var(--border);
+                border-radius:7px;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:500">
+          Cancel
+        </button>
+      </div>
+      <div class="s-status" id="jk-status"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- Upload modal -->
+<div class="overlay" id="upload-modal">
+  <div class="modal" style="width:490px">
+    <div class="modal-hd">
+      <h3 id="upload-modal-title">⬆ Upload Files</h3>
+      <button class="mclose" onclick="closeModal('upload-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--accent-light);border:1px solid rgba(79,70,229,.2);
+          border-radius:9px;padding:11px 13px;margin-bottom:14px;font-size:12px;
+          color:var(--accent);line-height:1.7">
+        <b>Pairing rules</b><br>
+        Files with the <b>same filename</b> pair automatically.<br>
+        Different names? Use the <b>Pairs</b> button after uploading.
+      </div>
+      <button class="save-btn" style="width:100%;margin-bottom:10px"
+              onclick="document.getElementById('upload-file-input').click()">
+        Browse files&hellip;
+      </button>
+      <input type="file" id="upload-file-input" accept=".csv,.xlsx,.xls" multiple
+             onchange="onUploadFilesChosen(this)">
+      <div id="upload-queue" style="display:none">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
+            letter-spacing:.06em;margin-bottom:8px">Selected files</div>
+        <div id="upload-queue-rows"></div>
+        <button class="save-btn" style="width:100%;margin-top:10px" onclick="confirmUpload()">Upload all</button>
+        <div class="s-status" id="upload-status"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pair manager -->
+<div class="overlay" id="pair-modal">
+  <div class="modal" style="width:620px">
+    <div class="modal-hd">
+      <h3>⇌ Manage File Pairs</h3>
+      <button class="mclose" onclick="closeModal('pair-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Link source and target files with different names.
+        The <b>pair name</b> is the SAP object type — it enables alias mapping
+        (e.g. <code>CUSTOMER</code> maps NAME1→NAMORG1 automatically).
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">+ Create new pair</div>
+        <div style="display:grid;grid-template-columns:1fr 26px 1fr;gap:8px;align-items:end;margin-bottom:10px">
+          <div>
+            <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:500">Source file</div>
+            <select id="pair-src-sel"></select>
+          </div>
+          <div style="font-size:16px;color:var(--muted);text-align:center;padding-bottom:4px">⇌</div>
+          <div>
+            <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:500">Target file</div>
+            <select id="pair-tgt-sel"></select>
+          </div>
+        </div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:500">
+            Pair name = SAP object type <span style="color:var(--accent)">(drives alias mapping)</span>
+          </div>
+          <input type="text" id="pair-name-inp" class="f-inp"
+                 placeholder="e.g. CUSTOMER, VENDOR, MATERIAL, BUSINESS_PARTNER"
+                 style="text-transform:uppercase">
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">
+            Known: CUSTOMER · VENDOR · MATERIAL · BUSINESS_PARTNER · GL_ACCOUNT · OPEN_ITEMS_AR · PURCHASE_ORDER · SALES_ORDER · ASSET
+          </div>
+        </div>
+        <button class="save-btn" onclick="createPair()">Create pair &amp; validate</button>
+        <div class="s-status" id="pair-create-status"></div>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Existing manual pairs</div>
+      <div id="existing-pairs-list"><div class="empty-msg" style="padding:12px">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Activity log -->
+<div class="overlay" id="log-modal">
+  <div class="modal">
+    <div class="modal-hd"><h3>Activity Log</h3>
+      <button class="mclose" onclick="closeModal('log-modal')">&times;</button></div>
+    <div class="modal-body" id="log-list"><div class="empty-msg">No activity yet.</div></div>
+  </div>
+</div>
+
+<!-- Reports -->
+<div class="overlay" id="rep-modal">
+  <div class="modal">
+    <div class="modal-hd"><h3>Excel Reports</h3>
+      <button class="mclose" onclick="closeModal('rep-modal')">&times;</button></div>
+    <div class="modal-body" id="rep-list"><div class="empty-msg">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="overlay" id="set-modal">
+  <div class="modal" style="width:700px">
+    <div class="modal-hd"><h3>Settings</h3>
+      <button class="mclose" onclick="closeModal('set-modal')">&times;</button></div>
+    <div class="modal-body">
+
+      <!-- ── FIELD TEMPLATES ── -->
+      <div class="s-section">
+        <h4>📋 Field Selection Templates</h4>
+        <div style="background:var(--accent-light);border:1px solid rgba(79,70,229,.2);
+            border-radius:9px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:var(--accent);line-height:1.7">
+          <b>How it works:</b> Upload a CSV, XLSX or TXT file with one SAP field name per row.
+          Activate it and <b>every validation will only check those fields</b> — across all tables.<br>
+          Templates work with either SAP 4.7 names (<code>LAND1</code>) or S/4HANA names
+          (<code>COUNTRY</code>) — both are recognised automatically.
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap">
+          <button class="save-btn" style="font-size:11px;padding:6px 14px"
+                  onclick="document.getElementById('tmpl-file-input').click()">
+            ⬆ Upload template
+          </button>
+          <input type="file" id="tmpl-file-input" accept=".csv,.xlsx,.xls,.txt"
+                 onchange="uploadTemplate(this)">
+          <a class="samp-dl" href="/api/templates/sample" download="sample_field_template.csv">
+            ↓ Download sample CSV
+          </a>
+          <span style="font-size:10px;color:var(--muted)">CSV / XLSX / TXT · one field name per row</span>
+        </div>
+        <div id="template-list">
+          <div style="font-size:12px;color:var(--muted);padding:8px 0">Loading…</div>
+        </div>
+        <div class="s-status" id="tmpl-st"></div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── FOLDER PATHS ── -->
+      <div class="s-section">
+        <h4>📁 Watched Folder Paths</h4>
+        <div class="f-row"><label>Source folder</label>
+          <input type="text" id="cfg-src" class="f-inp" placeholder="e.g. C:\migrations\source"></div>
+        <div class="f-row"><label>Target folder</label>
+          <input type="text" id="cfg-tgt" class="f-inp" placeholder="e.g. C:\migrations\target"></div>
+        <button class="save-btn" onclick="savePaths()">Save Paths</button>
+        <div class="s-status" id="path-st"></div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── PASS THRESHOLD ── -->
+      <div class="s-section">
+        <h4>✅ Pass Threshold</h4>
+        <div class="thr-note">A field is PASS when match % ≥ this value. 100% = exact match only. 90% allows 10% variance.</div>
+        <div class="thr-row">
+          <span style="font-size:12px;color:var(--muted)">50%</span>
+          <input type="range" id="thr-slider" min="50" max="100" step="1" value="100" oninput="updateThrDisplay()">
+          <span style="font-size:12px;color:var(--muted)">100%</span>
+          <span class="thr-val" id="thr-display">100%</span>
+        </div>
+        <button class="save-btn" onclick="saveThreshold()">Apply Threshold</button>
+        <div class="s-status" id="thr-st"></div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── MANUAL FIELD SELECTION ── -->
+      <div class="s-section">
+        <h4>☑ Manual Field Selection</h4>
+        <div class="fs-note">Pick which fields to validate from your actual uploaded files.
+          Fields are read directly from the files on the server — no scan required.
+          If a template is active, it overrides this.</div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:13px;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
+              letter-spacing:.06em;margin-bottom:10px">Select files to load fields from</div>
+          <div style="display:grid;grid-template-columns:1fr 24px 1fr;gap:8px;align-items:end;margin-bottom:10px">
+            <div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500">Source file (uploaded)</div>
+              <select id="fs-src-sel" onchange="onFsFileChanged()" style="font-size:11px;padding:6px 8px">
+                <option value="">— select source file —</option>
+              </select>
+            </div>
+            <div style="font-size:14px;color:var(--muted);text-align:center;padding-bottom:6px">↔</div>
+            <div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500">Target file (uploaded)</div>
+              <select id="fs-tgt-sel" onchange="onFsFileChanged()" style="font-size:11px;padding:6px 8px">
+                <option value="">— select target file —</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+            <button class="save-btn" style="font-size:11px;padding:5px 14px"
+                    onclick="loadFieldsFromSelected()">⚡ Load fields from these files</button>
+            <span id="prev-status" style="font-size:11px;color:var(--muted)"></span>
+          </div>
+          <div id="fs-file-info" style="font-size:10px;color:var(--muted);margin-top:7px;
+              line-height:1.5;display:none"></div>
+        </div>
+        <input type="text" id="fs-search" class="f-inp"
+               style="font-size:11px;padding:6px 10px;margin-bottom:7px"
+               placeholder="Search by label or field code…" oninput="filterFieldCheckboxes()">
+        <div id="fs-filter-bar" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px"></div>
+        <div class="fs-header">
+          <div class="fs-btns">
+            <button class="fs-btn" onclick="selectAllFields()">All</button>
+            <button class="fs-btn" onclick="clearAllFields()">None</button>
+            <button class="fs-btn" onclick="selectVisible()">Visible ✓</button>
+            <button class="fs-btn" onclick="clearVisible()">Visible ✗</button>
+          </div>
+          <span class="fs-count" id="fs-count">0 selected</span>
+        </div>
+        <div class="fs-grid" id="field-checkboxes">
+          <div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">
+            Load fields from files above, or run a scan first.
+          </div>
+        </div>
+        <button class="save-btn" style="margin-top:10px" onclick="saveFieldSelection()">Apply Selection</button>
+        <div class="s-status" id="field-st"></div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── CUSTOM LABELS ── -->
+      <div class="s-section">
+        <h4>🏷 Custom Field Labels</h4>
+        <div class="thr-note">Override any SAP field name. Format: <code>FIELD_NAME,YOUR_LABEL</code></div>
+        <div class="lbl-row">
+          <button class="lbl-btn" onclick="document.getElementById('lbl-input').click()">Upload label CSV</button>
+          <input type="file" id="lbl-input" accept=".csv" onchange="uploadLabels(this)">
+          <a class="samp-dl" href="/api/labels/sample" download="sample_labels.csv">↓ Sample CSV</a>
+        </div>
+        <div class="s-status" id="lbl-st"></div>
+        <div id="lbl-current" style="font-size:11px;color:var(--muted);margin-top:5px"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+var activeTable=null,allResults={},allStates={},lastLogCount=0;
+var uploadSide='source',uploadFileQueue=[];
+var currentFsFilter='all';
+
+async function init(){await refresh();setInterval(refresh,4000);}
+
+async function refresh(){
+  var d=await Promise.all([
+    fetch('/api/status').then(r=>r.json()),
+    fetch('/api/results').then(r=>r.json()),
+    fetch('/api/activity').then(r=>r.json()),
+  ]);
+  var status=d[0],results=d[1],activity=d[2];
+  document.getElementById('scan-ind').style.display=status.scanning?'inline-block':'none';
+  document.getElementById('scan-btn').disabled=status.scanning;
+  if(status.last_scan) document.getElementById('last-scan').textContent='Scanned: '+status.last_scan;
+  var thr=status.pass_threshold||100, sel=status.selected_fields||[], tmpl=status.active_template||'';
+  document.getElementById('thr-badge').textContent=
+    'Threshold: '+thr+'%'+((!tmpl&&sel.length)?' | Fields: '+sel.length:'');
+  var tmplBadge=document.getElementById('tmpl-badge');
+  if(tmpl){tmplBadge.style.display='';tmplBadge.textContent='Template: '+tmpl;}
+  else{tmplBadge.style.display='none';}
+  var newE=activity.slice(0,activity.length-lastLogCount);
+  if(lastLogCount>0) newE.forEach(function(e){toast(e.message,e.level);});
+  lastLogCount=activity.length;
+  allResults={};allStates=status.file_states||{};
+  results.forEach(function(r){allResults[r.name]=r;});
+  renderSidebar(status);
+  if(activeTable){
+    var fs=allStates[activeTable];
+    if(fs&&fs.state==='validating') renderValidating(activeTable,fs);
+    else if(allResults[activeTable]) renderDetail(allResults[activeTable]);
+  }
 }
 
-results_store = {}
-scan_status   = {
-    "last_scan": None, "scanning": False, "error": None,
-    "current_file": None, "total_files": 0, "completed_files": 0,
+async function triggerScan(){await fetch('/api/scan',{method:'POST'});setTimeout(refresh,600);}
+
+function renderSidebar(status){
+  var list=document.getElementById('table-list'),html='';
+  status.pairs.forEach(function(pair){
+    var fs=(status.file_states||{})[pair.name]||{},st=fs.state||'';
+    if(!pair.has_pair){
+      html+='<div class="sb-unmatched" onclick="openPairManager()" title="Click to pair">'+
+            '<div class="sb-icon sb-icon-warn">!</div>'+
+            '<div style="min-width:0;flex:1"><div class="tname">'+esc(pair.name)+'</div>'+
+            '<div class="tsub">'+(pair.source_path?'no target':'no source')+' - click to pair</div></div></div>';
+      return;
+    }
+    var pill='';
+    if(st==='validating') pill='<span class="sp sp-val">...</span>';
+    else{
+      var r=allResults[pair.name],s=r?r.status:'';
+      if(s==='PASS')         pill='<span class="sp sp-pass">PASS</span>';
+      else if(s==='WARNING') pill='<span class="sp sp-warn">WARN</span>';
+      else if(s==='FAIL')    pill='<span class="sp sp-fail">FAIL</span>';
+      else if(s==='ERROR')   pill='<span class="sp sp-fail">ERR</span>';
+      else                   pill='<span class="sp sp-new">New</span>';
+    }
+    var act=activeTable===pair.name?'active':'';
+    var isManual=pair.match_type==='manual';
+    html+='<div class="sb-item '+act+'" onclick="selectTable(\''+pair.name+'\',this)">'+
+          '<div class="sb-icon sb-icon-tbl">T</div>'+
+          '<div style="min-width:0;flex:1">'+
+          '<div class="tname">'+esc(pair.name)+(isManual?' <span style="font-size:9px;font-weight:400;color:var(--accent)">[paired]</span>':'')+'</div>'+
+          '<div class="tsub">'+esc(pair.source_file)+' vs '+esc(pair.target_file)+'</div></div>'+pill+'</div>';
+  });
+  if(!html) html='<div style="padding:18px 15px;font-size:12px;color:var(--muted);line-height:1.6">No file pairs found.<br>Upload files and use Pairs to link them.</div>';
+  list.innerHTML=html;
 }
-file_states  = {}
-activity_log = []
 
-SUPPORTED_EXT = {".csv", ".xlsx", ".xls"}
-TEMPLATE_EXT  = {".csv", ".xlsx", ".xls", ".txt"}
-scan_lock     = threading.Lock()
-
-
-# ── Config helpers ──────────────────────────────────────────────────────────────
-
-def load_config():
-    if CONFIG_FILE.exists():
-        try:
-            return {**DEFAULT_CONFIG, **json.loads(CONFIG_FILE.read_text())}
-        except Exception as e:
-            print(f"Config load failed: {e}")
-    return dict(DEFAULT_CONFIG)
-
-
-def save_config(cfg):
-    CONFIG_FILE.write_text(json.dumps(cfg, indent=2))
-
-
-def get_dirs():
-    cfg = load_config()
-    src = Path(cfg.get("source_dir", DEFAULT_CONFIG["source_dir"]))
-    tgt = Path(cfg.get("target_dir", DEFAULT_CONFIG["target_dir"]))
-    src.mkdir(parents=True, exist_ok=True)
-    tgt.mkdir(parents=True, exist_ok=True)
-    return src, tgt
-
-
-def log_event(message, level="info"):
-    entry = {"ts": datetime.now().strftime("%H:%M:%S"), "message": message, "level": level}
-    activity_log.append(entry)
-    if len(activity_log) > 200:
-        activity_log.pop(0)
-    print(f"  [{entry['ts']}] [{level.upper()}] {message}")
-
-
-def cleanup_old_reports(keep=20):
-    files = sorted(REPORTS_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
-    for f in files[keep:]:
-        try: f.unlink()
-        except: pass
-
-
-def _get_custom_labels():
-    return load_custom_labels(str(LABELS_FILE)) if LABELS_FILE.exists() else {}
-
-
-def _read_file_headers(src_path: str, tgt_path: str = None):
-    """Read only the header row — very fast, no full file load."""
-    def headers(path):
-        p = Path(path)
-        if not p.exists():
-            return []
-        if p.suffix.lower() in (".xlsx", ".xls"):
-            import openpyxl
-            wb   = openpyxl.load_workbook(str(p), read_only=True, data_only=True)
-            ws   = wb.active
-            cols = [str(c.value).strip().upper()
-                    for c in next(ws.iter_rows(max_row=1)) if c.value]
-            wb.close()
-            return cols
-        with open(str(p), encoding="utf-8-sig") as f:
-            reader = csv_mod.reader(f)
-            return [c.strip().upper() for c in next(reader)]
-
-    src_cols = headers(src_path) if src_path else []
-    tgt_cols = headers(tgt_path) if tgt_path else []
-    return src_cols, tgt_cols
-
-
-# ── Field-selection template helpers ───────────────────────────────────────────
-
-def _read_template_fields(path: Path) -> list:
-    """
-    Parse a field-selection template file.
-    Supported formats:
-      CSV  : first column = field names (header row auto-skipped)
-      XLSX : column A = field names (header row auto-skipped)
-      TXT  : one field name per line (lines starting with # are comments)
-    Returns: list of UPPERCASE field names, no blanks, no comments.
-    """
-    fields = []
-    suffix = path.suffix.lower()
-    try:
-        if suffix == ".txt":
-            for line in path.read_text(encoding="utf-8-sig").splitlines():
-                val = line.strip()
-                if val and not val.startswith("#"):
-                    fields.append(val.upper())
-
-        elif suffix in (".xlsx", ".xls"):
-            import openpyxl
-            wb        = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
-            ws        = wb.active
-            first_row = True
-            for row in ws.iter_rows(values_only=True):
-                val = str(row[0] or "").strip()
-                if not val:
-                    continue
-                if val.startswith("#"):
-                    continue
-                val_up = val.upper()
-                if first_row:
-                    first_row = False
-                    if val_up in ("FIELD", "FIELD_NAME", "FIELDS", "SAP_FIELD",
-                                  "FIELDNAME", "SAP FIELD", "FIELD NAME"):
-                        continue
-                fields.append(val_up)
-            wb.close()
-
-        else:  # CSV
-            with open(str(path), encoding="utf-8-sig") as f:
-                reader    = csv_mod.reader(f)
-                first_row = True
-                for row in reader:
-                    if not row:
-                        continue
-                    val = row[0].strip()
-                    if not val:
-                        continue
-                    # Skip comment lines
-                    if val.startswith("#"):
-                        continue
-                    val_up = val.upper()
-                    # Skip header row
-                    if first_row:
-                        first_row = False
-                        if val_up in ("FIELD", "FIELD_NAME", "FIELDS", "SAP_FIELD",
-                                      "FIELDNAME", "SAP FIELD", "FIELD NAME"):
-                            continue
-                    fields.append(val_up)
-
-    except Exception as e:
-        print(f"Template parse error ({path.name}): {e}")
-    return fields
-
-
-def _read_mapping_file(path: Path) -> dict:
-    """
-    Read a custom mapping CSV: SOURCE_FIELD,TARGET_FIELD
-    Returns {SOURCE: TARGET} dict (uppercase keys).
-    Lines starting with # are comments and are ignored.
-    """
-    mapping = {}
-    if not path.exists():
-        return mapping
-    try:
-        with open(str(path), encoding="utf-8-sig") as f:
-            reader = csv_mod.reader(f)
-            first  = True
-            for row in reader:
-                if not row or not row[0].strip():
-                    continue
-                if row[0].strip().startswith("#"):
-                    continue
-                src = row[0].strip().upper()
-                tgt = row[1].strip().upper() if len(row) > 1 else ""
-                # Skip header row
-                if first:
-                    first = False
-                    if src in ("SOURCE_FIELD", "SOURCE", "FROM", "SRC"):
-                        continue
-                if src and tgt:
-                    mapping[src] = tgt
-    except Exception as e:
-        print(f"Mapping file read error: {e}")
-    return mapping
-
-
-def _list_templates() -> list:
-    cfg    = load_config()
-    active = cfg.get("active_template", "")
-    result = []
-    for p in sorted(TEMPLATES_DIR.iterdir()):
-        if p.suffix.lower() in TEMPLATE_EXT and p.is_file():
-            fields = _read_template_fields(p)
-            result.append({
-                "filename":    p.name,
-                "field_count": len(fields),
-                "fields":      fields,
-                "is_active":   p.name == active,
-                "modified":    datetime.fromtimestamp(
-                    p.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
-            })
-    return result
-
-
-# ── File discovery & pairing ────────────────────────────────────────────────────
-
-def get_available_files():
-    src_dir, tgt_dir = get_dirs()
-    src = sorted([f for f in src_dir.iterdir() if f.suffix.lower() in SUPPORTED_EXT],
-                 key=lambda f: f.name.upper())
-    tgt = sorted([f for f in tgt_dir.iterdir() if f.suffix.lower() in SUPPORTED_EXT],
-                 key=lambda f: f.name.upper())
-    return src, tgt
-
-
-def discover_pairs():
-    SOURCE_DIR, TARGET_DIR = get_dirs()
-    cfg          = load_config()
-    manual_pairs = cfg.get("manual_pairs", [])
-
-    src_files = {f.name: f for f in SOURCE_DIR.iterdir()
-                 if f.suffix.lower() in SUPPORTED_EXT}
-    tgt_files = {f.name: f for f in TARGET_DIR.iterdir()
-                 if f.suffix.lower() in SUPPORTED_EXT}
-
-    pairs    = []
-    used_src = set()
-    used_tgt = set()
-
-    # Manual pairs first
-    for mp in manual_pairs:
-        src_name = mp.get("source_file", "")
-        tgt_name = mp.get("target_file", "")
-        name     = mp.get("name", "").upper().strip() or Path(src_name).stem.upper()
-        sp       = str(src_files[src_name]) if src_name in src_files else None
-        tp       = str(tgt_files[tgt_name]) if tgt_name in tgt_files else None
-        has_pair = bool(sp and tp)
-        mtime    = max(Path(sp).stat().st_mtime, Path(tp).stat().st_mtime) if has_pair else None
-        pairs.append({
-            "name": name, "source_path": sp, "target_path": tp,
-            "has_pair": has_pair, "mtime": mtime,
-            "source_file": Path(sp).name if sp else src_name,
-            "target_file": Path(tp).name if tp else tgt_name,
-            "match_type": "manual",
-            "missing": [] if has_pair else
-                       (["source"] if not sp else []) + (["target"] if not tp else []),
-        })
-        if sp: used_src.add(src_name)
-        if tp: used_tgt.add(tgt_name)
-
-    # Auto-pair by exact filename stem
-    src_by_stem = {Path(f).stem.upper(): (f, fp)
-                   for f, fp in src_files.items() if f not in used_src}
-    tgt_by_stem = {Path(f).stem.upper(): (f, fp)
-                   for f, fp in tgt_files.items() if f not in used_tgt}
-
-    for stem in sorted(set(src_by_stem) & set(tgt_by_stem)):
-        sf, sp = src_by_stem[stem]
-        tf, tp = tgt_by_stem[stem]
-        mtime  = max(sp.stat().st_mtime, tp.stat().st_mtime)
-        pairs.append({
-            "name": stem, "source_path": str(sp), "target_path": str(tp),
-            "has_pair": True, "mtime": mtime,
-            "source_file": sf, "target_file": tf,
-            "match_type": "auto", "missing": [],
-        })
-        used_src.add(sf)
-        used_tgt.add(tf)
-
-    # Unmatched
-    for f, fp in src_files.items():
-        if f not in used_src:
-            pairs.append({"name": Path(f).stem.upper(), "source_path": str(fp),
-                          "target_path": None, "has_pair": False, "mtime": None,
-                          "source_file": f, "target_file": None,
-                          "match_type": "unmatched", "missing": ["target"]})
-    for f, fp in tgt_files.items():
-        if f not in used_tgt:
-            pairs.append({"name": Path(f).stem.upper(), "source_path": None,
-                          "target_path": str(fp), "has_pair": False, "mtime": None,
-                          "source_file": None, "target_file": f,
-                          "match_type": "unmatched", "missing": ["source"]})
-    return pairs
-
-
-# ── Business status ─────────────────────────────────────────────────────────────
-
-def calculate_business_status(result, pass_threshold):
-    ss        = result.summary_stats
-    pass_rate = float(ss.get("pass_rate_pct", 0))
-    only_src  = int(result.records_only_in_source or 0)
-    only_tgt  = int(result.records_only_in_target or 0)
-
-    if pass_rate < pass_threshold:
-        return {"status": "FAIL", "field_status": "FAIL", "record_status": "CHECKED",
-                "message": (f"Field validation failed. Pass rate is {pass_rate:.2f}% "
-                            f"which is below threshold {pass_threshold:.2f}%.")}
-
-    if only_src > 0 or only_tgt > 0:
-        if only_src > 0 and only_tgt > 0:
-            msg = (f"{only_src:,} records only in source and "
-                   f"{only_tgt:,} records only in target.")
-        elif only_tgt > 0:
-            msg = f"Target has {only_tgt:,} extra records not in source."
-        else:
-            msg = f"Source has {only_src:,} records not found in target."
-        return {"status": "WARNING", "field_status": "PASS", "record_status": "WARNING",
-                "message": (f"Field validation passed ({pass_rate:.2f}% >= "
-                            f"{pass_threshold:.2f}%), but {msg}")}
-
-    return {"status": "PASS", "field_status": "PASS", "record_status": "PASS",
-            "message": (f"Validation passed. Field pass rate {pass_rate:.2f}% "
-                        f"and records fully reconciled.")}
-
-
-# ── Core validation runner ──────────────────────────────────────────────────────
-
-def run_validation(name, source_path, target_path):
-    cfg            = load_config()
-    pass_threshold = float(cfg.get("pass_threshold", 100.0))
-    custom         = _get_custom_labels()
-
-    # ── Determine field filter: template > manual > all ───────────────────────
-    selected_fields    = cfg.get("selected_fields", [])
-    active_template    = cfg.get("active_template", "")
-    template_name_used = ""
-
-    if active_template:
-        tmpl_path = TEMPLATES_DIR / active_template
-        if tmpl_path.exists():
-            tmpl_fields = _read_template_fields(tmpl_path)
-            if tmpl_fields:
-                selected_fields    = tmpl_fields
-                template_name_used = active_template
-                log_event(f"{name}: template '{active_template}' ({len(tmpl_fields)} fields)", "info")
-        else:
-            log_event(f"{name}: template '{active_template}' not found", "warn")
-
-    # ── Manual join keys: from config (user set via UI) ───────────────────────
-    manual_join_keys = cfg.get("manual_join_keys", {}).get(name.upper(), [])
-
-    src_mb = Path(source_path).stat().st_size / (1024 * 1024)
-    tgt_mb = Path(target_path).stat().st_size / (1024 * 1024)
-    if src_mb > 50 or tgt_mb > 50:
-        log_event(f"{name}: large files ({src_mb:.1f}MB / {tgt_mb:.1f}MB)", "warn")
-
-    # ── Read headers ──────────────────────────────────────────────────────────
-    try:
-        src_cols, tgt_cols = _read_file_headers(source_path, target_path)
-    except Exception as e:
-        log_event(f"{name}: could not read headers — {e}", "warn")
-        src_cols, tgt_cols = [], []
-
-    # ── Build field mapping ───────────────────────────────────────────────────
-    # Target columns are authoritative; filter by template/selection if active
-    tgt_no_jk = tgt_cols  # key cols stripped later by validator
-    if selected_fields:
-        sel_upper    = set(s.upper() for s in selected_fields)
-        tgt_filtered = [c for c in tgt_no_jk if c in sel_upper] or tgt_no_jk
-    else:
-        tgt_filtered = tgt_no_jk
-
-    src_no_jk = src_cols
-
-    custom_mapping = _read_mapping_file(MAPPING_FILE)
-    if custom_mapping:
-        src_set   = set(src_no_jk)
-        tgt_set   = set(tgt_filtered)
-        field_map = {s: t for s, t in custom_mapping.items()
-                     if s in src_set and t in tgt_set}
-        if field_map:
-            log_event(f"{name}: custom mapping — {len(field_map)} pairs", "info")
-            from core.field_mapper import MappingResult, MappedField
-            mapping_result = MappingResult(
-                mapped_fields=field_map,
-                mapped_details=[MappedField(source_field=s, target_field=t,
-                    method="custom", confidence=1.0,
-                    source_label=get_label(s, custom), target_label=get_label(t, custom))
-                    for s, t in field_map.items()],
-                unmapped_source=[c for c in src_no_jk if c not in field_map],
-                unmapped_target=[c for c in tgt_filtered if c not in field_map.values()],
-                suggested_mappings=[], object_type=name,
-                total_source_fields=len(src_no_jk), total_target_fields=len(tgt_filtered),
-            )
-        else:
-            custom_mapping = {}
-
-    if not custom_mapping:
-        mapping_result = build_field_mapping(
-            source_cols=src_no_jk, target_cols=tgt_filtered,
-            object_type=name, selected_fields=None, custom_labels=custom,
-        )
-        field_map = mapping_result.mapped_fields
-
-    exact_count = sum(1 for d in mapping_result.mapped_details if d.method == "exact")
-    alias_count = sum(1 for d in mapping_result.mapped_details if "alias" in d.method)
-    fuzzy_count = sum(1 for d in mapping_result.mapped_details if d.method == "fuzzy")
-    log_event(
-        f"{name}: {len(field_map)} fields mapped "
-        f"({exact_count} exact, {alias_count} alias, {fuzzy_count} fuzzy)"
-        + (f" via template '{template_name_used}'" if template_name_used else ""),
-        "info",
-    )
-
-    # ── Run validator (composite key, column-only loading) ────────────────────
-    validator = MaterialValidator(
-        field_map=field_map,
-        pass_threshold=pass_threshold,
-        manual_join_keys=manual_join_keys if manual_join_keys else None,
-        custom_labels=custom if custom else None,
-    )
-
-    result          = validator.validate(source_path, target_path, object_name=name)
-    ss              = result.summary_stats
-    business_status = calculate_business_status(result, pass_threshold)
-
-    # Log join key info
-    jk_str = " + ".join(result.join_keys) if result.join_keys else "none"
-    log_event(
-        f"{name}: join keys = [{jk_str}] "
-        f"method={result.key_detection_method} "
-        f"confidence={result.key_confidence} "
-        f"dup_src={result.duplicate_src} dup_tgt={result.duplicate_tgt}",
-        "info" if result.key_confidence in ("high","medium") else "warn",
-    )
-
-    # ── Build field rows ───────────────────────────────────────────────────────
-    field_rows = []
-    for fr in result.field_results:
-        detail = next(
-            (d for d in mapping_result.mapped_details if d.source_field == fr.field_source),
-            None,
-        )
-        disp = get_display(fr.field_source, fr.field_target, custom)
-        field_rows.append({
-            "field":              fr.field_source,
-            "field_label":        disp["source_label"],
-            "field_target":       fr.field_target,
-            "field_target_label": disp["target_label"],
-            "display_name":       disp["display_name"],
-            "display_mapping":    disp["display_mapping"],
-            "is_cross_mapped":    disp["is_cross_mapped"],
-            "is_key_field":       fr.is_key_field,          # join key field flag
-            "mapping_method":     detail.method if detail else ("key" if fr.is_key_field else "exact"),
-            "mapping_confidence": detail.confidence if detail else 1.0,
-            "type":               "numeric" if fr.is_numeric else "string",
-            "tolerance":          fr.tolerance_used,
-            "total":              fr.total_records,
-            "matched":            fr.matched,
-            "mismatched":         fr.mismatched,
-            "miss_source":        fr.missing_in_source,
-            "miss_target":        fr.missing_in_target,
-            "match_pct":          fr.match_pct,
-            "pass_threshold":     fr.pass_threshold,
-            "status":             fr.status,
-            "mismatches":         fr.mismatch_details,
-            "mismatch_count":     len(fr.mismatch_details),
-        })
-
-    # ── Mapping info for dashboard ─────────────────────────────────────────────
-    mapping_info = None
-    if result.mapping:
-        m = result.mapping
-        mapping_info = {
-            # Composite key fields
-            "join_keys":          result.join_keys,
-            "join_key_labels":    {k: get_label(k, custom) for k in result.join_keys},
-            "join_key":           m.join_key,           # backwards compat string
-            "join_key_label":     m.join_key_label,
-            "key_detection_method": result.key_detection_method,
-            "key_confidence":     result.key_confidence,
-            "duplicate_src":      result.duplicate_src,
-            "duplicate_tgt":      result.duplicate_tgt,
-            "duplicate_key_samples": result.duplicate_key_samples,
-            # Field info
-            "matched_fields":     m.matched_fields,
-            "matched_labels":     {f: get_label(f, custom) for f in m.matched_fields},
-            "source_only_fields": mapping_result.unmapped_source,
-            "source_only_labels": {f: get_label(f, custom) for f in mapping_result.unmapped_source},
-            "target_only_fields": mapping_result.unmapped_target,
-            "target_only_labels": {f: get_label(f, custom) for f in mapping_result.unmapped_target},
-            "numeric_fields":     m.numeric_fields,
-            "tolerance_map":      m.tolerance_map,
-            "selected_fields":    selected_fields,
-            "pass_threshold":     pass_threshold,
-        }
-
-    # ── Available fields for Settings ─────────────────────────────────────────
-    sel_set = set(selected_fields) if selected_fields else set()
-    available_fields = []
-    for col in src_cols:
-        tgt_col = field_map.get(col)
-        available_fields.append({
-            "field": col, "label": get_label(col, custom),
-            "in_source": True, "in_target": tgt_col is not None,
-            "target_col": tgt_col or "", "target_label": get_label(tgt_col, custom) if tgt_col else "",
-            "common": tgt_col is not None, "selected": not sel_set or col in sel_set,
-        })
-    for col in tgt_cols:
-        if col not in field_map.values():
-            available_fields.append({
-                "field": col, "label": get_label(col, custom),
-                "in_source": False, "in_target": True, "target_col": col,
-                "target_label": get_label(col, custom), "common": False, "selected": False,
-            })
-
-    ts             = datetime.now().strftime("%Y%m%d_%H%M%S")
-    excel_filename = f"{name}_{ts}.xlsx"
-    excel_path     = REPORTS_DIR / excel_filename
-
-    result_dict = {
-        "name":                   name,
-        "sap_object":             get_object_config(name).get("description", name),
-        "status":                 business_status["status"],
-        "validator_status":       result.overall_status,
-        "field_status":           business_status["field_status"],
-        "record_status":          business_status["record_status"],
-        "business_message":       business_status["message"],
-        "source_file":            Path(source_path).name,
-        "target_file":            Path(target_path).name,
-        "total_source_records":   result.total_source_records,
-        "total_target_records":   result.total_target_records,
-        "records_matched":        result.records_matched,
-        "records_only_in_source": result.records_only_in_source,
-        "records_only_in_target": result.records_only_in_target,
-        "fields_passed":          ss["fields_passed"],
-        "fields_failed":          ss["fields_failed"],
-        "total_fields":           ss["total_fields_validated"],
-        "pass_rate_pct":          ss["pass_rate_pct"],
-        "pass_threshold":         pass_threshold,
-        "selected_fields":        selected_fields,
-        "template_used":          template_name_used,
-        # Composite key
-        "join_keys":              result.join_keys,
-        "key_detection_method":   result.key_detection_method,
-        "key_confidence":         result.key_confidence,
-        "duplicate_src":          result.duplicate_src,
-        "duplicate_tgt":          result.duplicate_tgt,
-        "duplicate_key_samples":  result.duplicate_key_samples,
-        "manual_join_keys":       manual_join_keys,
-        "errors":                 result.errors,
-        "mapping":                mapping_info,
-        "field_mapping_detail":   mapping_result_to_dict(mapping_result),
-        "field_results":          field_rows,
-        "available_fields":       available_fields,
-        "run_at":                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "excel_file":             excel_filename,
+function selectTable(name,el){
+  activeTable=name;
+  document.querySelectorAll('.sb-item').forEach(function(e){e.classList.remove('active');});
+  if(el) el.classList.add('active');
+  var fs=allStates[name]||{};
+  if(fs.state==='validating'){renderValidating(name,fs);return;}
+  if(allResults[name]){renderDetail(allResults[name]);return;}
+  document.getElementById('welcome').style.display='none';
+  document.getElementById('detail').style.display='block';
+  document.getElementById('detail').innerHTML=
+    '<div class="banner bn-val"><span class="spinner"></span>'+
+    '<span><b>'+esc(name)+'</b> detected, waiting for validation...</span></div>';
+}
+
+function renderValidating(name,fs){
+  document.getElementById('welcome').style.display='none';
+  document.getElementById('detail').style.display='block';
+  document.getElementById('detail').innerHTML=
+    '<div class="banner bn-val"><span class="spinner"></span>'+
+    '<span><b>'+esc(name)+'</b> validating now... '+
+    (fs.source_file?'('+esc(fs.source_file)+' vs '+esc(fs.target_file)+')':'')+
+    '</span></div>'+
+    '<div style="color:var(--muted);font-size:12px;padding:14px 0">Results will appear automatically.</div>';
+}
+
+function renderDetail(r){
+  document.getElementById('welcome').style.display='none';
+  var det=document.getElementById('detail');
+  det.style.display='block';
+  var thr=r.pass_threshold||100, sel=r.selected_fields||[];
+  var pc=r.status==='PASS'?'pill-pass':r.status==='WARNING'?'pill-warn':r.status==='ERROR'?'pill-err':'pill-fail';
+  var fs=allStates[r.name]||{};
+  var banner=fs.state==='changed'?'<div class="banner bn-chg">File changed - re-validation queued.</div>':'';
+  var bClass=r.status==='PASS'?'bn-pass':r.status==='WARNING'?'bn-chg':'bn-fail';
+  var businessMsg=r.business_message?'<div class="banner '+bClass+'">'+esc(r.business_message)+'</div>':'';
+  var dlBtn=r.excel_file
+    ?'<a class="dl-btn" href="/api/download/'+encodeURIComponent(r.name)+'" download="'+esc(r.excel_file)+'">Download Excel</a>'
+    :'<span class="dl-btn disabled">Download Excel</span>';
+  var err=r.errors&&r.errors.length?'<div class="err-box">Error: '+r.errors.map(esc).join('<br>')+'</div>':'';
+  var thrHtml='<span class="info-bar">Pass threshold: <b>'+thr+'%</b>'
+    +((!r.template_used&&sel.length)?' &nbsp;|&nbsp; <b>'+sel.length+'</b> selected fields':' &nbsp;|&nbsp; All fields')
+    +'</span>';
+  var tmplHtml=r.template_used
+    ?'<span class="tmpl-bar">Template: <b>'+esc(r.template_used)+'</b> ('+
+      (r.total_fields||0)+' fields validated)</span>'
+    :'';
+  var so=r.records_only_in_source, to=r.records_only_in_target;
+  var cards='<div class="cards">'+
+    card(fmt(r.total_source_records),'Source records','')+
+    card(fmt(r.total_target_records),'Target records','')+
+    card(fmt(r.records_matched),'Keys matched','ok')+
+    card(fmt(so),'Source only',so?'warn':'')+
+    card(fmt(to),'Target only',to?'warn':'')+
+    card(r.fields_passed,'Fields passed','ok')+
+    card(r.fields_failed,'Fields failed',r.fields_failed?'warn':'ok')+
+    card(r.pass_rate_pct+'%','Pass rate','blue')+
+    '</div>';
+  var mapHtml='';
+  if(r.mapping){
+    var m=r.mapping,ml=m.matched_labels||{},sol=m.source_only_labels||{},tol=m.target_only_labels||{};
+    var so2=m.source_only_fields&&m.source_only_fields.length
+      ?m.source_only_fields.map(function(f){return '<span class="mtag w" title="'+esc(f)+'">'+(sol[f]||f)+(sol[f]&&sol[f]!==f?'<small>'+f+'</small>':'')+'</span>';}).join('')
+      :'<span style="color:var(--muted);font-size:10px">none</span>';
+    var to2=m.target_only_fields&&m.target_only_fields.length
+      ?m.target_only_fields.map(function(f){return '<span class="mtag w" title="'+esc(f)+'">'+(tol[f]||f)+(tol[f]&&tol[f]!==f?'<small>'+f+'</small>':'')+'</span>';}).join('')
+      :'<span style="color:var(--muted);font-size:10px">none</span>';
+    var nums=m.numeric_fields&&m.numeric_fields.length
+      ?m.numeric_fields.map(function(f){return '<span class="mtag num">'+(ml[f]||f)+'<small>'+f+' +/-'+m.tolerance_map[f]+'</small></span>';}).join('')
+      :'<span style="color:var(--muted);font-size:10px">none</span>';
+    var crossHtml='';
+    if(r.field_mapping_detail&&r.field_mapping_detail.mapped_fields){
+      var crosses=r.field_mapping_detail.mapped_fields.filter(function(d){return d.method!=='exact';});
+      if(crosses.length){
+        crossHtml='<div class="map-box" style="grid-column:1/-1"><h5>Cross-name mappings ('+crosses.length+')</h5>'+
+          crosses.map(function(d){return '<span class="mtag cross">'+(d.source_label||d.source_field)+
+            '<small>'+esc(d.source_field)+' -> '+esc(d.target_field)+'</small>'+
+            '<small style="opacity:.7">'+d.method+'</small></span>';}).join('')+'</div>';
+      }
     }
-
-    try:
-        generate_excel_report(result_dict, str(excel_path))
-        cleanup_old_reports()
-    except Exception as e:
-        result_dict["excel_error"] = str(e)
-        log_event(f"Excel failed for {name}: {e}", "error")
-
-    return result_dict
-    cfg            = load_config()
-    pass_threshold = float(cfg.get("pass_threshold", 100.0))
-    custom         = _get_custom_labels()
-
-    # ── Determine field filter: template > manual > all ───────────────────────
-    selected_fields    = cfg.get("selected_fields", [])
-    active_template    = cfg.get("active_template", "")
-    template_name_used = ""
-
-    if active_template:
-        tmpl_path = TEMPLATES_DIR / active_template
-        if tmpl_path.exists():
-            tmpl_fields = _read_template_fields(tmpl_path)
-            if tmpl_fields:
-                selected_fields    = tmpl_fields
-                template_name_used = active_template
-                log_event(
-                    f"{name}: using template '{active_template}' "
-                    f"({len(tmpl_fields)} fields)",
-                    "info",
-                )
-            else:
-                log_event(
-                    f"{name}: template '{active_template}' is empty — "
-                    f"validating all fields",
-                    "warn",
-                )
-        else:
-            log_event(
-                f"{name}: template '{active_template}' not found — "
-                f"validating all fields",
-                "warn",
-            )
-
-    obj_cfg  = get_object_config(name)
-    join_key = obj_cfg.get("join_key", None)
-
-    src_mb = Path(source_path).stat().st_size / (1024 * 1024)
-    tgt_mb = Path(target_path).stat().st_size / (1024 * 1024)
-    if src_mb > 50 or tgt_mb > 50:
-        log_event(
-            f"{name}: large files ({src_mb:.1f} MB / {tgt_mb:.1f} MB) — "
-            f"may take a few minutes",
-            "warn",
-        )
-
-    try:
-        src_cols, tgt_cols = _read_file_headers(source_path, target_path)
-    except Exception as e:
-        log_event(f"{name}: could not read headers — {e}", "warn")
-        src_cols, tgt_cols = [], []
-
-    jk_upper  = join_key.upper() if join_key else ""
-    src_no_jk = [c for c in src_cols if c != jk_upper]
-    tgt_no_jk = [c for c in tgt_cols if c != jk_upper]
-
-    # ── Build field mapping: source → target ──────────────────────────────────
-    # Forward approach: for each source column find its target equivalent.
-    # The target file drives WHAT gets validated — we use all target columns
-    # as the reference set. selected_fields/template filters which target
-    # columns we care about.
-
-    if selected_fields:
-        sel_upper = set(s.upper() for s in selected_fields)
-        # Filter to target columns the user selected
-        tgt_filtered = [c for c in tgt_no_jk if c in sel_upper]
-        if not tgt_filtered:
-            tgt_filtered = tgt_no_jk  # fallback: all target columns
-        log_event(
-            f"{name}: filtering to {len(tgt_filtered)} of "
-            f"{len(tgt_no_jk)} target columns",
-            "info",
-        )
-    else:
-        tgt_filtered = tgt_no_jk
-
-    # ── Build field mapping: custom file > alias > fuzzy ─────────────────────
-    # If user has uploaded a custom_mapping.csv, use it directly.
-    # Otherwise use the alias+fuzzy engine.
-    custom_mapping = _read_mapping_file(MAPPING_FILE)
-    if custom_mapping:
-        # Filter to pairs where both columns exist
-        src_set_check = set(src_no_jk)
-        tgt_set_check = set(tgt_filtered)
-        filtered_map  = {}
-        for s, t in custom_mapping.items():
-            if s in src_set_check and t in tgt_set_check:
-                filtered_map[s] = t
-        if filtered_map:
-            log_event(
-                f"{name}: using custom mapping file — "
-                f"{len(filtered_map)} of {len(custom_mapping)} pairs matched",
-                "info",
-            )
-            # Build a minimal MappingResult from the custom map
-            from core.field_mapper import MappingResult, MappedField
-            details = [
-                MappedField(
-                    source_field=s, target_field=t,
-                    method="custom", confidence=1.0,
-                    source_label=get_label(s, custom),
-                    target_label=get_label(t, custom),
-                )
-                for s, t in filtered_map.items()
-            ]
-            mapping_result = MappingResult(
-                mapped_fields=filtered_map,
-                mapped_details=details,
-                unmapped_source=[c for c in src_no_jk if c not in filtered_map],
-                unmapped_target=[c for c in tgt_filtered if c not in filtered_map.values()],
-                suggested_mappings=[],
-                object_type=name,
-                total_source_fields=len(src_no_jk),
-                total_target_fields=len(tgt_filtered),
-            )
-        else:
-            log_event(
-                f"{name}: custom mapping file has no matching pairs for this file — "
-                f"falling back to auto mapping",
-                "warn",
-            )
-            custom_mapping = {}
-
-    if not custom_mapping:
-        mapping_result = build_field_mapping(
-            source_cols=src_no_jk,
-            target_cols=tgt_filtered,
-            object_type=name,
-            selected_fields=None,
-            custom_labels=custom,
-        )
-
-    field_map    = mapping_result.mapped_fields
-    exact_count  = sum(1 for d in mapping_result.mapped_details if d.method == "exact")
-    alias_count  = sum(1 for d in mapping_result.mapped_details if "alias" in d.method)
-    fuzzy_count  = sum(1 for d in mapping_result.mapped_details if d.method == "fuzzy")
-
-    log_event(
-        f"{name}: mapped {len(field_map)} fields "
-        f"({exact_count} exact, {alias_count} alias, {fuzzy_count} fuzzy)"
-        + (f" via template '{template_name_used}'" if template_name_used else ""),
-        "info",
-    )
-
-    # Warn if template produced zero mapped fields
-    if selected_fields and template_name_used and not field_map:
-        log_event(
-            f"{name}: WARNING — template '{template_name_used}' has "
-            f"{len(selected_fields)} fields but NONE matched any source column. "
-            f"Source columns: {src_no_jk[:8]}... "
-            f"Template fields: {selected_fields[:8]}...",
-            "error",
-        )
-    elif selected_fields and template_name_used:
-        # Log which template fields weren't found
-        mapped_set = set(field_map.keys())
-        src_set    = set(src_no_jk)
-        missing    = [f for f in selected_fields
-                      if f not in src_set and f not in mapped_set]
-        if missing:
-            log_event(
-                f"{name}: {len(missing)} template field(s) not matched: "
-                f"{', '.join(missing[:8])}"
-                + (" …" if len(missing) > 8 else ""),
-                "warn",
-            )
-
-    validator = MaterialValidator(
-        field_map=field_map,
-        pass_threshold=pass_threshold,
-        join_key=join_key,
-        custom_labels=custom if custom else None,
-    )
-
-    result          = validator.validate(source_path, target_path)
-    ss              = result.summary_stats
-    business_status = calculate_business_status(result, pass_threshold)
-
-    # ── Build field rows ───────────────────────────────────────────────────────
-    field_rows = []
-    for fr in result.field_results:
-        detail = next(
-            (d for d in mapping_result.mapped_details
-             if d.source_field == fr.field_source), None
-        )
-        disp = get_display(fr.field_source, fr.field_target, custom)
-        field_rows.append({
-            "field":              fr.field_source,
-            "field_label":        disp["source_label"],
-            "field_target":       fr.field_target,
-            "field_target_label": disp["target_label"],
-            "display_name":       disp["display_name"],
-            "display_mapping":    disp["display_mapping"],
-            "is_cross_mapped":    disp["is_cross_mapped"],
-            "mapping_method":     detail.method if detail else "exact",
-            "mapping_confidence": detail.confidence if detail else 1.0,
-            "type":               "numeric" if fr.is_numeric else "string",
-            "tolerance":          fr.tolerance_used,
-            "total":              fr.total_records,
-            "matched":            fr.matched,
-            "mismatched":         fr.mismatched,
-            "miss_source":        fr.missing_in_source,
-            "miss_target":        fr.missing_in_target,
-            "match_pct":          fr.match_pct,
-            "pass_threshold":     fr.pass_threshold,
-            "status":             fr.status,
-            "mismatches":         fr.mismatch_details,
-            "mismatch_count":     len(fr.mismatch_details),
-        })
-
-    # ── Mapping info for dashboard ─────────────────────────────────────────────
-    mapping_info = None
-    if result.mapping:
-        mapping_info = {
-            "join_key":           result.mapping.join_key,
-            "join_key_label":     get_label(result.mapping.join_key, custom),
-            "matched_fields":     result.mapping.matched_fields,
-            "matched_labels":     {f: get_label(f, custom)
-                                   for f in result.mapping.matched_fields},
-            "source_only_fields": mapping_result.unmapped_source,
-            "source_only_labels": {f: get_label(f, custom)
-                                   for f in mapping_result.unmapped_source},
-            "target_only_fields": mapping_result.unmapped_target,
-            "target_only_labels": {f: get_label(f, custom)
-                                   for f in mapping_result.unmapped_target},
-            "numeric_fields":     result.mapping.numeric_fields,
-            "tolerance_map":      result.mapping.tolerance_map,
-            "selected_fields":    selected_fields,
-            "pass_threshold":     pass_threshold,
-        }
-
-    # ── available_fields for Settings field selector ───────────────────────────
-    sel_set = set(selected_fields) if selected_fields else set()
-    available_fields = []
-    for col in src_cols:
-        tgt_col = field_map.get(col)
-        available_fields.append({
-            "field":        col,
-            "label":        get_label(col, custom),
-            "in_source":    True,
-            "in_target":    tgt_col is not None,
-            "target_col":   tgt_col or "",
-            "target_label": get_label(tgt_col, custom) if tgt_col else "",
-            "common":       tgt_col is not None,
-            "selected":     not sel_set or col in sel_set,
-        })
-    for col in tgt_cols:
-        if col not in field_map.values() and col != jk_upper:
-            available_fields.append({
-                "field":        col,
-                "label":        get_label(col, custom),
-                "in_source":    False,
-                "in_target":    True,
-                "target_col":   col,
-                "target_label": get_label(col, custom),
-                "common":       False,
-                "selected":     False,
-            })
-
-    ts             = datetime.now().strftime("%Y%m%d_%H%M%S")
-    excel_filename = f"{name}_{ts}.xlsx"
-    excel_path     = REPORTS_DIR / excel_filename
-
-    result_dict = {
-        "name":                   name,
-        "sap_object":             obj_cfg.get("description", name),
-        "status":                 business_status["status"],
-        "validator_status":       result.overall_status,
-        "field_status":           business_status["field_status"],
-        "record_status":          business_status["record_status"],
-        "business_message":       business_status["message"],
-        "source_file":            Path(source_path).name,
-        "target_file":            Path(target_path).name,
-        "total_source_records":   result.total_source_records,
-        "total_target_records":   result.total_target_records,
-        "records_matched":        result.records_matched,
-        "records_only_in_source": result.records_only_in_source,
-        "records_only_in_target": result.records_only_in_target,
-        "fields_passed":          ss["fields_passed"],
-        "fields_failed":          ss["fields_failed"],
-        "total_fields":           ss["total_fields_validated"],
-        "pass_rate_pct":          ss["pass_rate_pct"],
-        "pass_threshold":         pass_threshold,
-        "selected_fields":        selected_fields,
-        "template_used":          template_name_used,
-        "errors":                 result.errors,
-        "mapping":                mapping_info,
-        "field_mapping_detail":   mapping_result_to_dict(mapping_result),
-        "field_results":          field_rows,
-        "available_fields":       available_fields,
-        "run_at":                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "excel_file":             excel_filename,
+    // Composite join key panel
+    var jkeys=r.join_keys||[];
+    var jlabels=m.join_key_labels||{};
+    var confCls='jk-conf-'+(r.key_detection_method==='manual'?'manual':r.key_confidence||'low');
+    var confTxt=r.key_detection_method==='manual'?'manual':'auto ('+esc(r.key_confidence||'low')+')';
+    var keysHtml=jkeys.map(function(k,i){
+      return (i>0?'<span class="jk-plus">+</span>':'')+
+        '<span class="jk-key">'+esc(jlabels[k]||k)+'<small>'+esc(k)+'</small></span>';
+    }).join('');
+    var dupHtml='';
+    if((r.duplicate_src||0)+(r.duplicate_tgt||0)>0){
+      var sampRows='';
+      if(r.duplicate_key_samples&&r.duplicate_key_samples.length>0){
+        var sampCols=Object.keys(r.duplicate_key_samples[0]);
+        sampRows='<div class="dup-samples"><table width="100%"><thead><tr>'+
+          sampCols.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>'+
+          r.duplicate_key_samples.slice(0,5).map(function(row){
+            return '<tr>'+sampCols.map(function(c){return '<td>'+esc(String(row[c]||''))+'</td>';}).join('')+'</tr>';
+          }).join('')+'</tbody></table></div>';
+      }
+      dupHtml='<div class="dup-panel"><strong>Duplicate keys detected</strong>: '+
+        fmt(r.duplicate_src||0)+' in source, '+fmt(r.duplicate_tgt||0)+' in target. '+
+        'These records share the same composite key — each is still validated separately.'+
+        sampRows+'</div>';
     }
-
-    try:
-        generate_excel_report(result_dict, str(excel_path))
-        cleanup_old_reports()
-    except Exception as e:
-        result_dict["excel_error"] = str(e)
-        log_event(f"Excel failed for {name}: {e}", "error")
-
-    return result_dict
-
-
-# ── Scan orchestrator ───────────────────────────────────────────────────────────
-
-def scan_and_validate_all():
-    if not scan_lock.acquire(blocking=False):
-        log_event("Scan already running — skipping", "warn")
-        return
-
-    scan_status.update({
-        "scanning": True, "error": None,
-        "current_file": None, "total_files": 0, "completed_files": 0,
-    })
-    try:
-        pairs       = discover_pairs()
-        valid_pairs = [p for p in pairs if p["has_pair"]]
-        scan_status["total_files"] = len(valid_pairs)
-
-        for pair in pairs:
-            name = pair["name"]
-
-            if not pair["has_pair"]:
-                if file_states.get(name, {}).get("state") != "unmatched":
-                    side  = "source" if pair["source_path"] else "target"
-                    other = "target" if side == "source" else "source"
-                    log_event(
-                        f"{name}: found in {side} only — "
-                        f"waiting for {other} to pair",
-                        "warn",
-                    )
-                    file_states[name] = {
-                        "state": "unmatched",
-                        "detected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "source_file": pair["source_file"],
-                        "target_file": pair["target_file"],
-                    }
-                continue
-
-            last_mtime = pair["mtime"]
-            existing   = results_store.get(name)
-            prev_state = file_states.get(name, {})
-
-            if not existing:
-                log_event(
-                    f"{name}: new pair [{pair.get('match_type','auto')}] — "
-                    f"{pair['source_file']} ↔ {pair['target_file']}",
-                    "info",
-                )
-            elif prev_state.get("_mtime") != last_mtime:
-                log_event(f"{name}: file changed — re-validating", "info")
-            else:
-                scan_status["completed_files"] += 1
-                continue
-
-            scan_status["current_file"] = name
-            file_states[name] = {
-                "state": "validating",
-                "detected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "source_file": pair["source_file"],
-                "target_file": pair["target_file"],
-                "_mtime": last_mtime,
-            }
-
-            try:
-                result = run_validation(
-                    name, pair["source_path"], pair["target_path"]
-                )
-                result["_mtime"] = last_mtime
-                results_store[name] = result
-
-                file_states[name] = {
-                    "state":         "done",
-                    "detected_at":   file_states[name]["detected_at"],
-                    "validated_at":  result["run_at"],
-                    "source_file":   pair["source_file"],
-                    "target_file":   pair["target_file"],
-                    "_mtime":        last_mtime,
-                    "status":        result["status"],
-                    "field_status":  result["field_status"],
-                    "record_status": result["record_status"],
-                    "message":       result["business_message"],
-                }
-
-                level = ("success" if result["status"] == "PASS"
-                         else "warn" if result["status"] == "WARNING"
-                         else "error")
-                log_event(
-                    f"{name}: {result['status']} — {result['business_message']} | "
-                    f"Matched: {result['records_matched']:,} | "
-                    f"Src only: {result['records_only_in_source']:,} | "
-                    f"Tgt only: {result['records_only_in_target']:,}",
-                    level,
-                )
-            except Exception as e:
-                file_states[name]["state"] = "error"
-                file_states[name]["error"] = str(e)
-                scan_status["error"]       = str(e)
-                log_event(f"{name}: ERROR — {e}", "error")
-            finally:
-                scan_status["completed_files"] += 1
-
-        scan_status["last_scan"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    except Exception as e:
-        scan_status["error"] = str(e)
-        log_event(f"Scan error: {e}", "error")
-    finally:
-        scan_status["scanning"]     = False
-        scan_status["current_file"] = None
-        scan_lock.release()
-
-
-def background_watcher(interval=60):
-    while True:
-        scan_and_validate_all()
-        time.sleep(interval)
-
-
-# ── Routes ──────────────────────────────────────────────────────────────────────
-
-@app.route("/")
-def index():
-    return render_template("dashboard.html")
-
-
-@app.route("/api/scan", methods=["POST"])
-def api_scan():
-    threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/status")
-def api_status():
-    pairs = discover_pairs()
-    cfg   = load_config()
-    s, t  = get_dirs()
-    sel   = cfg.get("selected_fields", [])
-    tmpl  = cfg.get("active_template", "")
-    return jsonify({
-        "last_scan":       scan_status["last_scan"],
-        "scanning":        scan_status["scanning"],
-        "error":           scan_status["error"],
-        "current_file":    scan_status["current_file"],
-        "total_files":     scan_status["total_files"],
-        "completed_files": scan_status["completed_files"],
-        "source_dir":      str(s),
-        "target_dir":      str(t),
-        "pairs":           pairs,
-        "file_states":     file_states,
-        "total_tables":    len([p for p in pairs if p["has_pair"]]),
-        "unmatched":       len([p for p in pairs if not p["has_pair"]]),
-        "pass_threshold":  cfg.get("pass_threshold", 100.0),
-        "selected_fields": sel,
-        "active_template": tmpl,
-        "validation_mode": (
-            f"template:{tmpl}" if tmpl else
-            "selected_fields"  if sel  else
-            "all_fields"
-        ),
-    })
-
-
-@app.route("/api/results")
-def api_results():
-    return jsonify(list(results_store.values()))
-
-
-@app.route("/api/results/<name>")
-def api_result_detail(name):
-    r = results_store.get(name.upper())
-    return jsonify(r) if r else (jsonify({"error": "Not found"}), 404)
-
-
-@app.route("/api/activity")
-def api_activity():
-    return jsonify(list(reversed(activity_log)))
-
-
-# ── Upload ──────────────────────────────────────────────────────────────────────
-
-@app.route("/api/upload/source", methods=["POST"])
-def upload_source():
-    return _handle_upload(request, get_dirs()[0], "source")
-
-
-@app.route("/api/upload/target", methods=["POST"])
-def upload_target():
-    return _handle_upload(request, get_dirs()[1], "target")
-
-
-def _handle_upload(req, dest_dir, side):
-    if "file" not in req.files:
-        return jsonify({"error": "No file part"}), 400
-    saved, errors = [], []
-    for f in req.files.getlist("file"):
-        if not f.filename:
-            continue
-        save_name = secure_filename(f.filename)
-        if Path(save_name).suffix.lower() not in SUPPORTED_EXT:
-            errors.append(f"Unsupported type: {save_name}")
-            continue
-        f.save(str(dest_dir / save_name))
-        log_event(f"Uploaded to {side}: {save_name}", "info")
-        saved.append(save_name)
-    if saved:
-        threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    if errors and not saved:
-        return jsonify({"error": "; ".join(errors)}), 400
-
-    # ── Read headers immediately from uploaded file so dashboard can
-    # populate the field selector without waiting for a scan ──────────────────
-    custom   = _get_custom_labels()
-    headers  = {}
-    for fname in saved:
-        fpath = dest_dir / fname
-        try:
-            if side == "source":
-                cols, _ = _read_file_headers(str(fpath))
-            else:
-                _, cols = _read_file_headers(None, str(fpath))
-            cols = cols or []
-            headers[fname] = {
-                "columns": cols,
-                "labels":  {c: get_label(c, custom) for c in cols},
-                "count":   len(cols),
-            }
-            log_event(
-                f"Headers read from {side}/{fname}: "
-                f"{len(cols)} columns — {', '.join(cols[:6])}"
-                + (" …" if len(cols) > 6 else ""),
-                "info",
-            )
-        except Exception as e:
-            headers[fname] = {"error": str(e), "columns": [], "count": 0}
-            log_event(f"Could not read headers from {fname}: {e}", "warn")
-
-    return jsonify({"ok": True, "saved": saved, "warnings": errors,
-                    "side": side, "headers": headers})
-
-
-@app.route("/api/upload/labels", methods=["POST"])
-def upload_labels():
-    if "file" not in request.files:
-        return jsonify({"error": "No file"}), 400
-    f = request.files["file"]
-    if not f.filename:
-        return jsonify({"error": "No filename"}), 400
-    f.save(str(LABELS_FILE))
-    log_event(f"Custom labels uploaded: {secure_filename(f.filename)}", "info")
-    results_store.clear()
-    for n in file_states:
-        if file_states[n].get("state") == "done":
-            file_states[n]["state"] = "changed"
-    threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/upload/mapping", methods=["POST"])
-def upload_mapping():
-    """
-    Upload a custom field mapping CSV.
-    Format: SOURCE_FIELD,TARGET_FIELD  (one pair per row, header optional)
-    Example:
-        KUNNR,KUNNR
-        NAME1,NAMORG1
-        LAND1,COUNTRY
-        ORT01,CITY1
-    This overrides the alias/fuzzy auto-mapping for all validations.
-    """
-    if "file" not in request.files:
-        return jsonify({"error": "No file"}), 400
-    f = request.files["file"]
-    if not f.filename:
-        return jsonify({"error": "No filename"}), 400
-    if Path(f.filename).suffix.lower() not in {".csv", ".txt"}:
-        return jsonify({"error": "Use a CSV or TXT file"}), 400
-    f.save(str(MAPPING_FILE))
-    pairs = _read_mapping_file(MAPPING_FILE)
-    log_event(
-        f"Custom mapping uploaded: {len(pairs)} pairs — "
-        f"{', '.join(f'{s}->{t}' for s,t in list(pairs.items())[:5])}"
-        + (" …" if len(pairs) > 5 else ""),
-        "info",
-    )
-    results_store.clear()
-    for n in file_states:
-        if file_states[n].get("state") == "done":
-            file_states[n]["state"] = "changed"
-    threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    return jsonify({"ok": True, "pairs": len(pairs), "mapping": pairs})
-
-
-@app.route("/api/upload/mapping/clear", methods=["POST"])
-def clear_mapping():
-    """Remove the custom mapping file — revert to auto alias/fuzzy mapping."""
-    if MAPPING_FILE.exists():
-        MAPPING_FILE.unlink()
-        log_event("Custom mapping cleared — using auto alias/fuzzy mapping", "info")
-        results_store.clear()
-        for n in file_states:
-            if file_states[n].get("state") == "done":
-                file_states[n]["state"] = "changed"
-        threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/upload/mapping/status", methods=["GET"])
-def mapping_status():
-    """Return current custom mapping pairs if a mapping file is uploaded."""
-    if MAPPING_FILE.exists():
-        pairs = _read_mapping_file(MAPPING_FILE)
-        return jsonify({"active": True, "pairs": len(pairs), "mapping": pairs})
-    return jsonify({"active": False, "pairs": 0, "mapping": {}})
-
-
-@app.route("/api/upload/mapping/sample", methods=["GET"])
-def mapping_sample():
-    """Download a sample mapping CSV."""
-    lines = [
-        "SOURCE_FIELD,TARGET_FIELD",
-        "# One pair per row. Lines starting with # are ignored.",
-        "# Use this when auto-mapping doesn't work correctly.",
-        "KUNNR,KUNNR",
-        "NAME1,NAMORG1",
-        "KTOKD,KTOKD",
-        "LAND1,COUNTRY",
-        "ORT01,CITY1",
-        "PSTLZ,POST_CODE1",
-        "STRAS,STREET",
-        "REGIO,REGION",
-        "ZTERM,ZTERM",
-        "WAERS,WAERS",
-    ]
-    return Response(
-        "\n".join(lines).encode("utf-8"),
-        mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=sample_mapping.csv"},
-    )
-
-
-# ── Template routes ─────────────────────────────────────────────────────────────
-
-@app.route("/api/templates", methods=["GET"])
-def api_templates_list():
-    return jsonify(_list_templates())
-
-
-@app.route("/api/templates/upload", methods=["POST"])
-def api_template_upload():
-    if "file" not in request.files:
-        return jsonify({"error": "No file"}), 400
-    f = request.files["file"]
-    if not f.filename:
-        return jsonify({"error": "No filename"}), 400
-    save_name = secure_filename(f.filename)
-    if Path(save_name).suffix.lower() not in TEMPLATE_EXT:
-        return jsonify({"error": "Use CSV, XLSX, or TXT"}), 400
-    dest = TEMPLATES_DIR / save_name
-    f.save(str(dest))
-    fields = _read_template_fields(dest)
-    log_event(
-        f"Template uploaded: {save_name} ({len(fields)} fields): "
-        f"{', '.join(fields[:6])}" + (" …" if len(fields) > 6 else ""),
-        "info",
-    )
-    return jsonify({
-        "ok": True, "filename": save_name,
-        "field_count": len(fields), "fields": fields,
-    })
-
-
-@app.route("/api/templates/<filename>", methods=["DELETE"])
-def api_template_delete(filename):
-    safe = secure_filename(filename)
-    path = TEMPLATES_DIR / safe
-    if not path.exists():
-        return jsonify({"error": "Not found"}), 404
-    path.unlink()
-    cfg = load_config()
-    if cfg.get("active_template") == safe:
-        cfg["active_template"] = ""
-        save_config(cfg)
-    log_event(f"Template deleted: {safe}", "info")
-    return jsonify({"ok": True})
-
-
-@app.route("/api/templates/activate", methods=["POST"])
-def api_template_activate():
-    data     = request.get_json(force=True)
-    filename = data.get("filename", "").strip()
-
-    if filename:
-        safe = secure_filename(filename)
-        path = TEMPLATES_DIR / safe
-        if not path.exists():
-            return jsonify({"error": f"Template not found: {safe}"}), 404
-        fields = _read_template_fields(path)
-        cfg    = load_config()
-        cfg["active_template"] = safe
-        save_config(cfg)
-        results_store.clear()
-        for n in file_states:
-            if file_states[n].get("state") == "done":
-                file_states[n]["state"] = "changed"
-        threading.Thread(target=scan_and_validate_all, daemon=True).start()
-        log_event(
-            f"Template activated: {safe} — validating "
-            f"{len(fields)} fields: "
-            f"{', '.join(fields[:6])}" + (" …" if len(fields) > 6 else ""),
-            "info",
-        )
-        return jsonify({
-            "ok": True, "active_template": safe,
-            "field_count": len(fields), "fields": fields,
-        })
-
-    # Deactivate
-    cfg = load_config()
-    cfg["active_template"] = ""
-    save_config(cfg)
-    results_store.clear()
-    for n in file_states:
-        if file_states[n].get("state") == "done":
-            file_states[n]["state"] = "changed"
-    threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    log_event("Template deactivated — validating all fields", "info")
-    return jsonify({"ok": True, "active_template": ""})
-
-
-@app.route("/api/templates/sample", methods=["GET"])
-def api_template_sample():
-    """Download a sample field-selection template CSV."""
-    lines = [
-        "FIELD_NAME",
-        "# One SAP field name per row. Lines starting with # are ignored.",
-        "# You can use SAP 4.7 names OR S/4HANA names — both work.",
-        "# Example for Customer:",
-        "KUNNR",
-        "NAME1",
-        "KTOKD",
-        "LAND1",
-        "STRAS",
-        "ORT01",
-        "PSTLZ",
-        "REGIO",
-        "ZTERM",
-        "WAERS",
-        "TELF1",
-        "SPRAS",
-        "ERDAT",
-    ]
-    return Response(
-        "\n".join(lines).encode("utf-8"),
-        mimetype="text/csv",
-        headers={"Content-Disposition":
-                 "attachment; filename=sample_field_template.csv"},
-    )
-
-
-# ── Config ──────────────────────────────────────────────────────────────────────
-
-@app.route("/api/config", methods=["GET"])
-def api_get_config():
-    cfg    = load_config()
-    custom = _get_custom_labels()
-    sel    = cfg.get("selected_fields", [])
-    sel_set = set(sel)
-
-    # ── Build available_fields from TARGET file columns (authoritative) ──────
-    # Target file has ALL expected S/4HANA fields — use those as the field list.
-    # Source columns are shown as secondary (S badge) so user can see coverage.
-    src_dir, tgt_dir = get_dirs()
-    available = []
-
-    try:
-        src_files = sorted([f for f in src_dir.iterdir()
-                            if f.suffix.lower() in SUPPORTED_EXT],
-                           key=lambda f: f.stat().st_mtime, reverse=True)
-        tgt_files = sorted([f for f in tgt_dir.iterdir()
-                            if f.suffix.lower() in SUPPORTED_EXT],
-                           key=lambda f: f.stat().st_mtime, reverse=True)
-
-        src_path = str(src_files[0]) if src_files else None
-        tgt_path = str(tgt_files[0]) if tgt_files else None
-
-        if tgt_path or src_path:
-            src_cols, tgt_cols = _read_file_headers(src_path or "", tgt_path or "")
-            src_set = set(src_cols)
-            tgt_set = set(tgt_cols)
-
-            # Target columns are the master list
-            # Mark each as: in_target=True always, in_source=True if also in source
-            for col in sorted(tgt_set):
-                available.append({
-                    "field":     col,
-                    "label":     get_label(col, custom),
-                    "in_source": col in src_set,
-                    "in_target": True,
-                    "common":    col in src_set,
-                    "selected":  not sel_set or col in sel_set,
-                })
-            # Add source-only columns (in source but not target)
-            for col in sorted(src_set - tgt_set):
-                available.append({
-                    "field":     col,
-                    "label":     get_label(col, custom),
-                    "in_source": True,
-                    "in_target": False,
-                    "common":    False,
-                    "selected":  False,
-                })
-    except Exception as e:
-        log_event(f"Config: could not read file headers from disk — {e}", "warn")
-
-    # Fallback to last scan result if disk read produced nothing
-    if not available and results_store:
-        first     = next(iter(results_store.values()))
-        available = first.get("available_fields", [
-            {"field": fr["field"], "label": get_label(fr["field"], custom),
-             "in_source": True, "in_target": True, "common": True,
-             "selected":  not sel_set or fr["field"] in sel_set}
-            for fr in first.get("field_results", [])
-        ])
-
-    # Also include which files are currently on disk so the UI can show them
-    src_dir2, tgt_dir2 = get_dirs()
-    src_files_list = sorted([f.name for f in src_dir2.iterdir()
-                              if f.suffix.lower() in SUPPORTED_EXT])
-    tgt_files_list = sorted([f.name for f in tgt_dir2.iterdir()
-                              if f.suffix.lower() in SUPPORTED_EXT])
-
-    return jsonify({
-        "source_dir":         cfg.get("source_dir",      DEFAULT_CONFIG["source_dir"]),
-        "target_dir":         cfg.get("target_dir",      DEFAULT_CONFIG["target_dir"]),
-        "pass_threshold":     cfg.get("pass_threshold",  100.0),
-        "selected_fields":    sel,
-        "active_template":    cfg.get("active_template", ""),
-        "available_fields":   available,
-        "source_files":       src_files_list,
-        "target_files":       tgt_files_list,
-        "labels_file_exists": LABELS_FILE.exists(),
-        "labels_file":        str(LABELS_FILE) if LABELS_FILE.exists() else None,
-    })
-
-
-@app.route("/api/config", methods=["POST"])
-def api_set_config():
-    data    = request.get_json(force=True)
-    cfg     = load_config()
-    changed = False
-
-    for key in ("source_dir", "target_dir"):
-        if key in data and str(data[key]).strip():
-            np = str(Path(str(data[key]).strip()))
-            if np != cfg.get(key):
-                cfg[key] = np
-                changed  = True
-
-    if "pass_threshold" in data:
-        thr = float(data["pass_threshold"])
-        if thr != cfg.get("pass_threshold"):
-            cfg["pass_threshold"] = thr
-            changed = True
-            log_event(f"Pass threshold → {thr}%", "info")
-
-    if "selected_fields" in data:
-        sel = [str(f).strip().upper() for f in data["selected_fields"]
-               if str(f).strip()]
-        if sel != cfg.get("selected_fields", []):
-            cfg["selected_fields"] = sel
-            changed = True
-            log_event(
-                f"Field selection: {len(sel)} fields" if sel
-                else "Field selection: all fields",
-                "info",
-            )
-
-    if changed:
-        save_config(cfg)
-        results_store.clear()
-        for n in file_states:
-            if file_states[n].get("state") == "done":
-                file_states[n]["state"] = "changed"
-        threading.Thread(target=scan_and_validate_all, daemon=True).start()
-
-    return jsonify({"ok": True, "config": cfg})
-
-
-# ── Field preview ────────────────────────────────────────────────────────────────
-
-@app.route("/api/fields/from-files", methods=["POST"])
-def api_fields_from_files():
-    """
-    Read headers from specific files already on disk by filename.
-    Body: {"source_file": "customers.csv", "target_file": "Export_Data.csv"}
-    Called when user picks a specific file pair to load fields from.
-    Returns full field list with labels immediately — no scan needed.
-    """
-    data     = request.get_json(force=True)
-    src_name = data.get("source_file", "").strip()
-    tgt_name = data.get("target_file", "").strip()
-    custom   = _get_custom_labels()
-    sel      = load_config().get("selected_fields", [])
-    sel_set  = set(sel)
-
-    src_dir, tgt_dir = get_dirs()
-    src_path = str(src_dir / src_name) if src_name else None
-    tgt_path = str(tgt_dir / tgt_name) if tgt_name else None
-
-    errors = {}
-    src_cols, tgt_cols = [], []
-
-    if src_path and Path(src_path).exists():
-        try:
-            src_cols, _ = _read_file_headers(src_path)
-        except Exception as e:
-            errors["source"] = str(e)
-    elif src_name:
-        errors["source"] = f"File not found: {src_name}"
-
-    if tgt_path and Path(tgt_path).exists():
-        try:
-            _, tgt_cols = _read_file_headers(None, tgt_path)
-        except Exception as e:
-            errors["target"] = str(e)
-    elif tgt_name:
-        errors["target"] = f"File not found: {tgt_name}"
-
-    src_set  = set(src_cols)
-    tgt_set  = set(tgt_cols)
-
-    fields = []
-    # TARGET columns are the master list — show all target fields first
-    for col in sorted(tgt_set):
-        fields.append({
-            "field":     col,
-            "label":     get_label(col, custom),
-            "in_source": col in src_set,
-            "in_target": True,
-            "common":    col in src_set,
-            "selected":  not sel_set or col in sel_set,
-        })
-    # Source-only columns (in source but not in target)
-    for col in sorted(src_set - tgt_set):
-        fields.append({
-            "field":     col,
-            "label":     get_label(col, custom),
-            "in_source": True,
-            "in_target": False,
-            "common":    False,
-            "selected":  False,
-        })
-
-    common   = len(src_set & tgt_set)
-    src_only = len(src_set - tgt_set)
-    tgt_only = len(tgt_set - src_set)
-
-    log_event(
-        f"Fields from files: "
-        f"src={src_name}({len(src_cols)}) "
-        f"tgt={tgt_name}({len(tgt_cols)}) "
-        f"→ {common} common, {src_only} src-only, {tgt_only} tgt-only",
-        "info",
-    )
-
-    return jsonify({
-        "fields":      fields,
-        "src_count":   len(src_cols),
-        "tgt_count":   len(tgt_cols),
-        "common":      common,
-        "src_only":    src_only,
-        "tgt_only":    tgt_only,
-        "errors":      errors,
-        "source_file": src_name,
-        "target_file": tgt_name,
-    })
-
-
-@app.route("/api/fields/preview", methods=["POST"])
-def api_fields_preview():
-    data      = request.get_json(force=True)
-    src_path  = data.get("source_path", "").strip()
-    tgt_path  = data.get("target_path", "").strip()
-    src_delim = data.get("source_delimiter", ",")
-    tgt_delim = data.get("target_delimiter", ",")
-    custom    = _get_custom_labels()
-
-    def read_headers(path, delim):
-        p = Path(path)
-        if not p.exists():
-            return None, f"File not found: {path}"
-        try:
-            if p.suffix.lower() in (".xlsx", ".xls"):
-                import openpyxl
-                wb   = openpyxl.load_workbook(str(p), read_only=True, data_only=True)
-                ws   = wb.active
-                cols = [str(c.value).strip().upper()
-                        for c in next(ws.iter_rows(max_row=1)) if c.value]
-                wb.close()
-            else:
-                import csv
-                with open(str(p), encoding="utf-8-sig") as f:
-                    cols = [c.strip().upper()
-                            for c in next(csv.reader(f, delimiter=delim))]
-            return cols, None
-        except Exception as e:
-            return None, str(e)
-
-    src_cols, src_err = read_headers(src_path, src_delim) if src_path else ([], None)
-    tgt_cols, tgt_err = read_headers(tgt_path, tgt_delim) if tgt_path else ([], None)
-
-    errors = {}
-    if src_err: errors["source"] = src_err
-    if tgt_err: errors["target"] = tgt_err
-
-    src_set  = set(src_cols or [])
-    tgt_set  = set(tgt_cols or [])
-    common   = sorted(src_set & tgt_set)
-    src_only = sorted(src_set - tgt_set)
-    tgt_only = sorted(tgt_set - src_set)
-
-    cfg          = load_config()
-    selected_set = set(cfg.get("selected_fields", []))
-
-    fields = []
-    for col in common:
-        fields.append({
-            "field": col, "label": get_label(col, custom),
-            "in_source": True, "in_target": True, "common": True,
-            "selected": not selected_set or col in selected_set,
-        })
-    for col in src_only:
-        fields.append({
-            "field": col, "label": get_label(col, custom),
-            "in_source": True, "in_target": False, "common": False,
-            "selected": False,
-        })
-    for col in tgt_only:
-        fields.append({
-            "field": col, "label": get_label(col, custom),
-            "in_source": False, "in_target": True, "common": False,
-            "selected": False,
-        })
-
-    return jsonify({
-        "fields":    fields,
-        "src_count": len(src_cols or []),
-        "tgt_count": len(tgt_cols or []),
-        "common":    len(common),
-        "src_only":  len(src_only),
-        "tgt_only":  len(tgt_only),
-        "errors":    errors,
-    })
-
-
-# ── Files & pairs ────────────────────────────────────────────────────────────────
-
-@app.route("/api/files/list")
-def api_files_list():
-    src, tgt = get_available_files()
-    return jsonify({
-        "source_files": [f.name for f in src],
-        "target_files": [f.name for f in tgt],
-    })
-
-
-@app.route("/api/pairs", methods=["GET"])
-def api_pairs_get():
-    return jsonify(load_config().get("manual_pairs", []))
-
-
-@app.route("/api/pairs", methods=["POST"])
-def api_pairs_save():
-    data  = request.get_json(force=True)
-    seen  = set()
-    clean = []
-    for p in data.get("pairs", []):
-        name = str(p.get("name", "")).strip().upper()
-        sf   = str(p.get("source_file", "")).strip()
-        tf   = str(p.get("target_file", "")).strip()
-        if not name or not sf or not tf or name in seen:
-            continue
-        seen.add(name)
-        clean.append({"name": name, "source_file": sf, "target_file": tf})
-    cfg = load_config()
-    cfg["manual_pairs"] = clean
-    save_config(cfg)
-    results_store.clear()
-    for n in list(file_states):
-        if file_states[n].get("state") == "done":
-            file_states[n]["state"] = "changed"
-    log_event(f"Manual pairs updated: {len(clean)} pair(s)", "info")
-    threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    return jsonify({"ok": True, "saved": len(clean)})
-
-
-@app.route("/api/pairs/<name>", methods=["DELETE"])
-def api_pairs_delete(name):
-    cfg    = load_config()
-    pairs  = cfg.get("manual_pairs", [])
-    before = len(pairs)
-    pairs  = [p for p in pairs if p["name"].upper() != name.upper()]
-    cfg["manual_pairs"] = pairs
-    save_config(cfg)
-    removed = before - len(pairs)
-    if removed:
-        results_store.pop(name.upper(), None)
-        file_states.pop(name.upper(), None)
-        log_event(f"Manual pair removed: {name}", "info")
-    return jsonify({"ok": True, "removed": removed})
-
-
-# ── Join key routes ────────────────────────────────────────────────────────────
-# These routes power the "Select Join Keys" panel in the dashboard.
-# No keys are ever hardcoded — everything comes from the actual uploaded files.
-
-@app.route("/api/join-keys", methods=["GET"])
-def api_join_keys_get():
-    """Return all saved manual join keys keyed by pair name."""
-    return jsonify(load_config().get("manual_join_keys", {}))
-
-
-@app.route("/api/join-keys/<name>/columns", methods=["GET"])
-def api_join_keys_columns(name):
-    """
-    Return the common columns between source and target files for a pair.
-    This is what the UI shows as checkboxes for the user to pick join keys from.
-    No hardcoding — purely based on what is in the uploaded files.
-    """
-    pname = name.upper()
-    pairs = discover_pairs()
-    pair  = next((p for p in pairs if p["name"] == pname), None)
-    if not pair or not pair["has_pair"]:
-        return jsonify({"error": f"Pair '{pname}' not found or missing files"}), 404
-
-    def read_headers(path):
-        import csv as _csv
-        p = str(path)
-        if p.lower().endswith((".xlsx", ".xls")):
-            import openpyxl
-            wb   = openpyxl.load_workbook(p, read_only=True, data_only=True)
-            ws   = wb.active
-            cols = [str(c.value).strip().upper()
-                    for c in next(ws.iter_rows(max_row=1)) if c.value]
-            wb.close()
-            return cols
-        with open(p, encoding="utf-8-sig") as f:
-            return [c.strip().upper() for c in next(_csv.reader(f))]
-
-    try:
-        src_hdrs = read_headers(pair["source_path"])
-        tgt_hdrs = read_headers(pair["target_path"])
-    except Exception as e:
-        return jsonify({"error": f"Cannot read file headers: {e}"}), 500
-
-    custom      = _get_custom_labels()
-    src_set     = set(src_hdrs)
-    tgt_set     = set(tgt_hdrs)
-    common      = sorted(src_set & tgt_set)
-    src_only    = sorted(src_set - tgt_set)
-    tgt_only    = sorted(tgt_set - src_set)
-
-    # Current saved keys for this pair
-    saved_keys = load_config().get("manual_join_keys", {}).get(pname, [])
-
-    return jsonify({
-        "pair_name":     pname,
-        "source_file":   pair["source_file"],
-        "target_file":   pair["target_file"],
-        "common_columns": [
-            {
-                "field":    col,
-                "label":    get_label(col, custom),
-                "selected": col in saved_keys,
-            }
-            for col in common
-        ],
-        "source_only":   [{"field": c, "label": get_label(c, custom)} for c in src_only],
-        "target_only":   [{"field": c, "label": get_label(c, custom)} for c in tgt_only],
-        "saved_keys":    saved_keys,
-        "total_common":  len(common),
-    })
-
-
-@app.route("/api/join-keys/<name>", methods=["POST"])
-def api_join_keys_set(name):
-    """
-    Save user-selected join keys for a pair.
-    Body: {"keys": ["MATNR","KSCHL","EKORG"]}
-    Triggers immediate re-validation using the new composite key.
-    """
-    data  = request.get_json(force=True)
-    keys  = [k.strip().upper() for k in data.get("keys", []) if k.strip()]
-    cfg   = load_config()
-    pname = name.upper()
-
-    if "manual_join_keys" not in cfg:
-        cfg["manual_join_keys"] = {}
-
-    if keys:
-        cfg["manual_join_keys"][pname] = keys
-        log_event(
-            f"Join keys set for {pname}: {' + '.join(keys)} "
-            f"({len(keys)} field composite key)",
-            "info",
-        )
-    else:
-        cfg["manual_join_keys"].pop(pname, None)
-        log_event(f"Join keys cleared for {pname} — auto-detect will suggest", "info")
-
-    save_config(cfg)
-    results_store.pop(pname, None)
-    if pname in file_states:
-        file_states[pname]["state"] = "changed"
-    threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    return jsonify({"ok": True, "name": pname, "keys": keys})
-
-
-@app.route("/api/join-keys/<name>", methods=["DELETE"])
-def api_join_keys_clear(name):
-    """Clear saved join keys — auto-detection will suggest on next validation."""
-    cfg   = load_config()
-    pname = name.upper()
-    cfg.get("manual_join_keys", {}).pop(pname, None)
-    save_config(cfg)
-    results_store.pop(pname, None)
-    if pname in file_states:
-        file_states[pname]["state"] = "changed"
-    log_event(f"Join keys cleared for {pname}", "info")
-    threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/join-keys/<name>/suggest", methods=["POST"])
-def api_join_keys_suggest(name):
-    """
-    Run auto-detection on the uploaded files and return suggested keys.
-    Does NOT save anything — purely a suggestion for the UI to show.
-    The user still has to click 'Apply' to actually save the keys.
-    """
-    pname = name.upper()
-    pairs = discover_pairs()
-    pair  = next((p for p in pairs if p["name"] == pname), None)
-    if not pair or not pair["has_pair"]:
-        return jsonify({"error": f"Pair '{pname}' not found"}), 404
-
-    try:
-        import pandas as pd
-        from core.key_detector import detect_composite_key
-
-        def read_headers(path):
-            import csv as _csv
-            p = str(path)
-            if p.lower().endswith((".xlsx", ".xls")):
-                import openpyxl
-                wb   = openpyxl.load_workbook(p, read_only=True, data_only=True)
-                ws   = wb.active
-                cols = [str(c.value).strip().upper()
-                        for c in next(ws.iter_rows(max_row=1)) if c.value]
-                wb.close()
-                return cols
-            with open(p, encoding="utf-8-sig") as f:
-                return [c.strip().upper() for c in next(_csv.reader(f))]
-
-        src_hdrs = read_headers(pair["source_path"])
-        tgt_hdrs = read_headers(pair["target_path"])
-        common   = sorted(set(src_hdrs) & set(tgt_hdrs))
-
-        # Sample up to 5000 rows — enough for uniqueness scoring without full load
-        def load_sample(path, cols):
-            p = str(path)
-            if p.lower().endswith((".xlsx", ".xls")):
-                df = pd.read_excel(p, dtype=str, nrows=5000,
-                                   usecols=cols if cols else None)
-            else:
-                df = pd.read_csv(p, dtype=str, encoding="utf-8-sig",
-                                 nrows=5000, na_filter=False,
-                                 usecols=cols if cols else None)
-            df.columns = df.columns.str.strip().str.upper()
-            return df
-
-        src_df = load_sample(pair["source_path"], common)
-        tgt_df = load_sample(pair["target_path"], common)
-
-        kd     = detect_composite_key(src_df, tgt_df, object_name=pname)
-        custom = _get_custom_labels()
-
-        # Show uniqueness score for each common column individually
-        col_scores = []
-        for col in common:
-            if col in src_df.columns and col in tgt_df.columns:
-                src_unique = src_df[col].nunique() / max(len(src_df), 1)
-                tgt_unique = tgt_df[col].nunique() / max(len(tgt_df), 1)
-                col_scores.append({
-                    "field":          col,
-                    "label":          get_label(col, custom),
-                    "src_uniqueness": round(src_unique * 100, 1),
-                    "tgt_uniqueness": round(tgt_unique * 100, 1),
-                    "in_suggestion":  col in kd.join_keys,
-                })
-        col_scores.sort(key=lambda x: -x["src_uniqueness"])
-
-        return jsonify({
-            "ok":               True,
-            "suggested_keys":   kd.join_keys,
-            "key_labels":       {k: get_label(k, custom) for k in kd.join_keys},
-            "detection_method": kd.detection_method,
-            "confidence":       kd.confidence,
-            "uniqueness_src":   round(kd.uniqueness_src * 100, 1),
-            "uniqueness_tgt":   round(kd.uniqueness_tgt * 100, 1),
-            "duplicate_src":    kd.duplicate_src,
-            "duplicate_tgt":    kd.duplicate_tgt,
-            "common_columns":   common,
-            "column_scores":    col_scores,
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# ── Labels / reports / downloads ─────────────────────────────────────────────────
-
-@app.route("/api/labels/sample")
-def api_labels_sample():
-    lines = ["FIELD_NAME,FRIENDLY_LABEL"] + [
-        f"{k},{v}" for k, v in list(SAP_FIELD_LABELS.items())[:25]
-    ]
-    return Response(
-        "\n".join(lines).encode("utf-8"),
-        mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=sample_labels.csv"},
-    )
-
-
-@app.route("/api/objects")
-def api_objects():
-    custom = _get_custom_labels()
-    return jsonify([
-        {
-            "key":            k,
-            "description":    v.get("description", k),
-            "join_key":       v.get("join_key", ""),
-            "join_key_label": get_label(v.get("join_key", ""), custom),
-            "key_fields":     [
-                {"field": f, "label": get_label(f, custom)}
-                for f in v.get("key_fields", [])
-            ],
-        }
-        for k, v in SAP_OBJECT_CONFIG.items()
-    ])
-
-
-@app.route("/api/download/<name>")
-def api_download(name):
-    r = results_store.get(name.upper())
-    if not r:
-        return jsonify({"error": "Not found"}), 404
-    path = REPORTS_DIR / r.get("excel_file", "")
-    if not path.exists():
-        return jsonify({"error": "Report file missing"}), 404
-    return send_file(
-        str(path), as_attachment=True, download_name=path.name,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-
-@app.route("/api/download-file/<filename>")
-def api_download_file(filename):
-    path = REPORTS_DIR / filename
-    if not path.exists() or not filename.endswith(".xlsx"):
-        return jsonify({"error": "Not found"}), 404
-    return send_file(
-        str(path), as_attachment=True, download_name=filename,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-
-@app.route("/api/reports")
-def api_reports():
-    files = sorted(
-        REPORTS_DIR.glob("*.xlsx"),
-        key=lambda f: f.stat().st_mtime,
-        reverse=True,
-    )
-    return jsonify([
-        {
-            "filename": f.name,
-            "size_kb":  round(f.stat().st_size / 1024, 1),
-            "modified": datetime.fromtimestamp(
-                f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        for f in files
-    ])
-
-
-@app.route("/api/folders")
-def api_folders():
-    s, t = get_dirs()
-    return jsonify({
-        "source_dir":  str(s),
-        "target_dir":  str(t),
-        "reports_dir": str(REPORTS_DIR),
-    })
-
-
-@app.route("/api/clear-results", methods=["POST"])
-def api_clear_results():
-    results_store.clear()
-    file_states.clear()
-    activity_log.clear()
-    scan_status.update({
-        "last_scan": None, "scanning": False, "error": None,
-        "current_file": None, "total_files": 0, "completed_files": 0,
-    })
-    log_event("Results cleared", "info")
-    return jsonify({"ok": True})
-
-
-# ── Entry point ─────────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    s, t = get_dirs()
-    cfg  = load_config()
-    print("\n  ╔══════════════════════════════════════╗")
-    print("  ║  Genpact SAP Migration Validator V4  ║")
-    print("  ╚══════════════════════════════════════╝")
-    print(f"  Source dir     → {s}")
-    print(f"  Target dir     → {t}")
-    print(f"  Templates      → {TEMPLATES_DIR}")
-    print(f"  Reports        → {REPORTS_DIR}")
-    print(f"  Pass threshold → {cfg.get('pass_threshold', 100)}%")
-    if cfg.get("active_template"):
-        print(f"  Active template→ {cfg['active_template']}")
-    print("  Open           → http://localhost:5000\n")
-    threading.Thread(target=scan_and_validate_all, daemon=True).start()
-    # threading.Thread(target=background_watcher, args=(60,), daemon=True).start()
-    app.run(debug=False, port=5000, use_reloader=False)
+    var jkPanel='<div class="jk-panel">'+
+      '<div class="jk-header">'+
+        '<div>'+
+          '<div class="jk-title">Composite join key ('+jkeys.length+' field'+(jkeys.length!==1?'s':'')+')</div>'+
+          '<div class="jk-keys" style="margin-top:6px">'+keysHtml+'</div>'+
+          '<div class="jk-meta">'+
+            '<span>Method: <span class="'+confCls+'">'+confTxt+'</span></span>'+
+            (r.key_detection_method!=='manual'?
+              '<span>Src uniqueness: <b>'+(((r.mapping&&r.mapping.uniqueness_src)||0)*100).toFixed(1)+'%</b></span>':'')+
+            '<span>Duplicates: src=<b>'+fmt(r.duplicate_src||0)+'</b> tgt=<b>'+fmt(r.duplicate_tgt||0)+'</b></span>'+
+          '</div>'+
+        '</div>'+
+        '<button class="jk-edit-btn" onclick="openJoinKeyModal(this.dataset.n)" data-n="'+esc(r.name)+'">Edit join keys</button>'+
+      '</div>'+
+      dupHtml+
+    '</div>';
+    mapHtml=jkPanel+'<div class="sec">Field mapping</div><div class="map-grid">'+
+      '<div class="map-box"><h5>Numeric fields (auto-tolerance)</h5>'+nums+'</div>'+
+      '<div class="map-box"><h5>Source-only (not validated)</h5>'+so2+'</div>'+
+      '<div class="map-box"><h5>Target-only (not validated)</h5>'+to2+'</div>'+
+      (crossHtml?crossHtml:'')+'</div>';
+  }
+  // Separate key fields from data fields for grouped display
+  var keyFields  = r.field_results.filter(function(fr){return  fr.is_key_field;});
+  var dataFields = r.field_results.filter(function(fr){return !fr.is_key_field;});
+  var allFields  = keyFields.concat(dataFields);
+  var prevGroup  = null;
+
+  var frows=allFields.map(function(fr,i){
+    var pct=fr.match_pct,fthr=fr.pass_threshold||thr;
+    var bc=pct>=fthr?'var(--pass)':pct>=(fthr*0.8)?'var(--warn)':'var(--fail)';
+    var isKey=fr.is_key_field||false;
+    var groupHeader='';
+    var curGroup=isKey?'key':'data';
+    if(curGroup!==prevGroup){
+      prevGroup=curGroup;
+      groupHeader=isKey
+        ?'<tr class="key-group-hdr"><td colspan="8">Join Key Fields (used for record matching)</td></tr>'
+        :'<tr class="data-group-hdr"><td colspan="8">Data Fields (validated for value accuracy)</td></tr>';
+    }
+    var stBadge=isKey?'<span class="bdg-key">KEY</span>':
+      (fr.status==='PASS'?'<span class="bdg b-pass">PASS</span>':'<span class="bdg b-fail">FAIL</span>');
+    var typeTag=isKey?'<span class="bdg-key" style="font-size:10px">Join Key</span>':
+      (fr.type==='numeric'
+        ?'<span class="tn">Numeric +/-'+fr.tolerance+'</span>'
+        :'<span class="ts">Text</span>');
+    var displayName=fr.display_name||fr.field_label||fr.field;
+    var isCross=fr.is_cross_mapped||false;
+    var techLine=isCross
+      ?'<div class="ft">'+esc(fr.field)+' <span style="color:var(--accent)">-></span> '+esc(fr.field_target||'')+'</div>'
+      :'<div class="ft">'+esc(fr.field)+'</div>';
+    var methodBadge='';
+    if(fr.mapping_method&&fr.mapping_method!=='exact'){
+      var ml2={alias_object:'alias',alias_global:'global alias',fuzzy:'fuzzy ('+Math.round((fr.mapping_confidence||0)*100)+'%)'};
+      methodBadge=' <span style="font-size:9px;padding:1px 6px;border-radius:4px;background:var(--accent-light);color:var(--accent)">'+(ml2[fr.mapping_method]||fr.mapping_method)+'</span>';
+    }
+    var totalMiss=fr.mismatch_count||(fr.mismatches?fr.mismatches.length:0);
+    var issues=fr.mismatched+fr.miss_source+fr.miss_target;
+    var hasMiss=totalMiss>0||issues>0;
+    var expBtn=hasMiss
+      ?'<button class="exp-btn" id="eb-'+i+'" onclick="toggleRow('+i+',event)">'+
+        '<i class="arr">&#9658;</i> '+fmt(totalMiss)+' mismatch'+(totalMiss!==1?'es':'')+'</button>'
+      :'';
+    var missHtml='';
+    if(hasMiss&&fr.mismatches&&fr.mismatches.length>0){
+      var rows=fr.mismatches.slice(0,20).map(function(m){
+        return '<tr><td style="font-family:monospace;font-size:10px;color:var(--muted)">'+esc(String(m.material))+'</td>'+
+        '<td class="dold">'+esc(String(m.source_value))+'</td>'+
+        '<td class="dnew">'+esc(String(m.target_value))+'</td>'+
+        '<td style="font-size:10px;color:var(--muted)">'+esc(m.issue)+'</td></tr>';
+      }).join('');
+      var moreNote=totalMiss>20?'<div class="more-note">Showing 20 of '+fmt(totalMiss)+' - download Excel for full list.</div>':'';
+      missHtml='<div class="miss-inner"><table><thead><tr>'+
+        '<th>Key</th><th>Source ('+esc(fr.field)+')</th>'+
+        '<th>Target ('+esc(fr.field_target||fr.field)+')</th><th>Issue</th>'+
+        '</tr></thead><tbody>'+rows+'</tbody></table>'+moreNote+'</div>';
+    }else if(hasMiss){
+      missHtml='<div class="miss-inner"><div style="font-size:11px;color:var(--muted);padding:8px">'+
+        fmt(issues)+' issue(s). Download Excel for details.</div></div>';
+    }
+    var detRow=hasMiss
+      ?'<tr class="miss-row" id="md-'+i+'" onclick="event.stopPropagation()"><td colspan="8">'+missHtml+'</td></tr>'
+      :'';
+    return groupHeader+'<tr class="data-row'+(isKey?' key-field-row':'')+'">'+
+
+      '<td>'+
+        '<div class="fl">'+esc(displayName)+'</div>'+techLine+methodBadge+
+        (expBtn?'<div style="margin-top:5px">'+expBtn+'</div>':'')+
+      '</td>'+
+      '<td>'+typeTag+'</td>'+
+      '<td>'+fmt(fr.total)+'</td>'+
+      '<td>'+fmt(fr.matched)+'</td>'+
+      '<td>'+(hasMiss?'<b style="color:var(--fail)">'+fmt(issues)+'</b>':fmt(issues))+'</td>'+
+      '<td><div class="bar-w"><div class="bar-bg"><div class="bar-f" style="width:'+pct+'%;background:'+bc+'"></div></div>'+
+        '<span class="bar-v" style="color:'+bc+'">'+pct+'%</span></div></td>'+
+      '<td><span style="font-size:10px;color:var(--muted)">>='+fthr+'%</span></td>'+
+      '<td>'+stBadge+'</td></tr>'+detRow;
+  }).join('');
+  det.innerHTML=banner+businessMsg+err+
+    '<div class="det-hdr">'+
+    '<div><div class="det-title">'+esc(r.name)+'</div>'+
+    '<div class="det-meta">'+esc(r.source_file)+' vs '+esc(r.target_file)+
+    ' - '+esc(r.run_at)+
+    (r.sap_object?' - <span style="color:var(--muted)">'+esc(r.sap_object)+'</span>':'')+
+    '</div></div>'+
+    '<div class="det-right">'+dlBtn+'<span class="st-pill '+pc+'">'+r.status+'</span></div></div>'+
+    thrHtml+tmplHtml+mapHtml+cards+
+    '<div class="sec">Field-level results</div>'+
+    '<div class="tbl-wrap"><table><thead><tr>'+
+    '<th>Field</th><th>Type</th><th>Total</th><th>Matched</th>'+
+    '<th>Issues</th><th>Match %</th><th>Threshold</th><th>Status</th>'+
+    '</tr></thead><tbody>'+frows+'</tbody></table></div>';
+}
+
+function toggleRow(i,event){
+  if(event) event.stopPropagation();
+  var row=document.getElementById('md-'+i),btn=document.getElementById('eb-'+i);
+  if(!row) return;
+  var open=row.classList.contains('open');
+  row.classList.toggle('open',!open);
+  if(btn) btn.classList.toggle('open',!open);
+}
+
+// Upload modal
+function openUploadModal(side){
+  uploadSide=side;uploadFileQueue=[];
+  document.getElementById('upload-modal-title').textContent=
+    'Upload '+(side==='source'?'Source':'Target')+' Files';
+  document.getElementById('upload-queue').style.display='none';
+  document.getElementById('upload-queue-rows').innerHTML='';
+  document.getElementById('upload-status').textContent='';
+  document.getElementById('upload-file-input').value='';
+  document.getElementById('upload-modal').classList.add('open');
+}
+function onUploadFilesChosen(input){
+  if(!input.files||!input.files.length) return;
+  uploadFileQueue=Array.from(input.files).map(function(f){return {file:f};});
+  document.getElementById('upload-queue-rows').innerHTML=uploadFileQueue.map(function(item){
+    return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;'+
+    'padding:9px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px">'+
+    '<span style="font-size:12px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500">'+
+    esc(item.file.name)+'</span>'+
+    '<span style="font-size:10px;color:var(--muted)">'+fmt(Math.round(item.file.size/1024))+' KB</span></div>';
+  }).join('');
+  document.getElementById('upload-queue').style.display='block';
+}
+async function confirmUpload(){
+  var st=document.getElementById('upload-status');
+  st.style.color='var(--muted)';st.textContent='Uploading...';
+  var saved=[],errors=[];
+  for(var i=0;i<uploadFileQueue.length;i++){
+    var item=uploadFileQueue[i];
+    var fd=new FormData();fd.append('file',item.file,item.file.name);
+    try{
+      var res=await fetch('/api/upload/'+uploadSide,{method:'POST',body:fd});
+      var data=await res.json();
+      if(data.ok) saved=saved.concat(data.saved||[]);
+      else errors.push(data.error||'Error');
+    }catch(e){errors.push(String(e));}
+  }
+  if(errors.length&&!saved.length){st.style.color='var(--fail)';st.textContent='Errors: '+errors.join(', ');return;}
+  st.style.color='var(--pass)';st.textContent='Uploaded: '+saved.join(', ');
+  var stEl=document.getElementById(uploadSide==='source'?'src-st':'tgt-st');
+  if(stEl){stEl.style.color='var(--pass)';stEl.textContent='OK: '+saved.join(', ');}
+  toast('Uploaded to '+uploadSide+': '+saved.join(', '),'success');
+  setTimeout(function(){closeModal('upload-modal');refresh();},900);
+}
+
+// Pair manager
+async function openPairManager(){
+  document.getElementById('pair-modal').classList.add('open');
+  document.getElementById('pair-create-status').textContent='';
+  await loadPairDropdowns();
+  await loadExistingPairs();
+}
+async function loadPairDropdowns(){
+  var data=await fetch('/api/files/list').then(function(r){return r.json();});
+  document.getElementById('pair-src-sel').innerHTML=
+    '<option value="">-- choose source file --</option>'+
+    (data.source_files||[]).map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('');
+  document.getElementById('pair-tgt-sel').innerHTML=
+    '<option value="">-- choose target file --</option>'+
+    (data.target_files||[]).map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('');
+}
+async function loadExistingPairs(){
+  var pairs=await fetch('/api/pairs').then(function(r){return r.json();});
+  var el=document.getElementById('existing-pairs-list');
+  if(!pairs||!pairs.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:8px 0">No manual pairs. All pairs are auto-matched by filename.</div>';
+    return;
+  }
+  el.innerHTML=pairs.map(function(p){
+    return '<div style="display:flex;align-items:center;gap:9px;padding:9px 12px;'+
+    'background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">'+
+    '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12px">'+esc(p.name)+'</div>'+
+    '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+esc(p.source_file)+' vs '+esc(p.target_file)+'</div></div>'+
+    '<button onclick="deletePair(\''+esc(p.name)+'\')" class="t-btn del">Remove</button></div>';
+  }).join('');
+}
+async function createPair(){
+  var srcFile=document.getElementById('pair-src-sel').value;
+  var tgtFile=document.getElementById('pair-tgt-sel').value;
+  var pairName=document.getElementById('pair-name-inp').value.trim().toUpperCase();
+  var st=document.getElementById('pair-create-status');
+  if(!srcFile){st.style.color='var(--fail)';st.textContent='Select a source file.';return;}
+  if(!tgtFile){st.style.color='var(--fail)';st.textContent='Select a target file.';return;}
+  if(!pairName){st.style.color='var(--fail)';st.textContent='Enter a pair name (e.g. CUSTOMER).';return;}
+  if(srcFile===tgtFile){st.style.color='var(--fail)';st.textContent='Source and target must differ.';return;}
+  st.style.color='var(--muted)';st.textContent='Saving...';
+  var existing=await fetch('/api/pairs').then(function(r){return r.json();});
+  var filtered=existing.filter(function(p){return p.name!==pairName;});
+  filtered.push({name:pairName,source_file:srcFile,target_file:tgtFile});
+  var res=await fetch('/api/pairs',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pairs:filtered})});
+  var data=await res.json();
+  if(data.ok){
+    st.style.color='var(--pass)';st.textContent='Pair created: '+pairName;
+    toast('Pair created: '+pairName,'success');
+    await loadExistingPairs();setTimeout(function(){refresh();},400);
+  }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+}
+async function deletePair(name){
+  await fetch('/api/pairs/'+encodeURIComponent(name),{method:'DELETE'});
+  toast('Pair removed: '+name,'info');
+  await loadExistingPairs();refresh();
+}
+
+// Log / Reports
+async function openLog(){
+  document.getElementById('log-modal').classList.add('open');
+  var activity=await fetch('/api/activity').then(function(r){return r.json();});
+  var el=document.getElementById('log-list');
+  if(!activity.length){el.innerHTML='<div class="empty-msg">No activity yet.</div>';return;}
+  var icons={info:'i',success:'OK',warn:'!',error:'X'};
+  el.innerHTML=activity.map(function(e){
+    return '<div class="le '+e.level+'"><span class="le-ts">'+e.ts+'</span>'+
+    '<span class="le-m">'+(icons[e.level]||'')+' '+esc(e.message)+'</span></div>';
+  }).join('');
+}
+async function openReports(){
+  document.getElementById('rep-modal').classList.add('open');
+  var list=document.getElementById('rep-list');
+  list.innerHTML='<div class="empty-msg">Loading...</div>';
+  var reports=await fetch('/api/reports').then(function(r){return r.json();});
+  if(!reports.length){list.innerHTML='<div class="empty-msg">No reports yet.</div>';return;}
+  list.innerHTML=reports.map(function(rep){
+    return '<div class="rep-row"><span class="rep-nm">'+esc(rep.filename)+'</span>'+
+    '<span class="rep-mt">'+rep.size_kb+'KB - '+rep.modified+'</span>'+
+    '<a class="rep-dl" href="/api/download-file/'+encodeURIComponent(rep.filename)+
+    '" download="'+esc(rep.filename)+'">Download</a></div>';
+  }).join('');
+}
+
+// Settings
+async function openSettings(){
+  document.getElementById('set-modal').classList.add('open');
+  var cfg=await fetch('/api/config').then(function(r){return r.json();});
+  document.getElementById('cfg-src').value=cfg.source_dir||'';
+  document.getElementById('cfg-tgt').value=cfg.target_dir||'';
+  var thr=cfg.pass_threshold||100;
+  document.getElementById('thr-slider').value=thr;
+  document.getElementById('thr-display').textContent=thr+'%';
+  document.getElementById('lbl-current').textContent=
+    cfg.labels_file_exists?'Custom labels loaded: '+cfg.labels_file:'Using built-in SAP field dictionary.';
+  // Populate file dropdowns from disk
+  var srcFiles=cfg.source_files||[], tgtFiles=cfg.target_files||[];
+  var srcSel=document.getElementById('fs-src-sel');
+  var tgtSel=document.getElementById('fs-tgt-sel');
+  srcSel.innerHTML='<option value="">-- select source file --</option>'+
+    srcFiles.map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('');
+  tgtSel.innerHTML='<option value="">-- select target file --</option>'+
+    tgtFiles.map(function(f){return '<option value="'+esc(f)+'">'+esc(f)+'</option>';}).join('');
+  if(srcFiles.length===1) srcSel.value=srcFiles[0];
+  if(tgtFiles.length===1) tgtSel.value=tgtFiles[0];
+  // Show current fields
+  var sel=cfg.selected_fields||[];
+  var avail=cfg.available_fields||[];
+  if(avail.length){
+    var enriched=avail.map(function(f){return Object.assign({},f,{selected:sel.length===0||sel.indexOf(f.field)>=0});});
+    renderFieldCheckboxes(enriched,{
+      common:   enriched.filter(function(f){return f.common;}).length,
+      src_only: enriched.filter(function(f){return f.in_source&&!f.in_target;}).length,
+      tgt_only: enriched.filter(function(f){return !f.in_source&&f.in_target;}).length,
+    });
+    var fst=document.getElementById('field-st');
+    fst.style.color=sel.length?'var(--pass)':'var(--muted)';
+    fst.textContent=sel.length?'Validating '+sel.length+' selected field(s).':'Validating all fields.';
+    var info=document.getElementById('fs-file-info');
+    if(info&&(srcFiles.length||tgtFiles.length)){
+      info.style.display='';
+      info.textContent='Currently showing fields from: '+(srcFiles[0]||'?')+' vs '+(tgtFiles[0]||'?')+
+        '. Select different files and click Load to change.';
+    }
+  }else{
+    document.getElementById('field-checkboxes').innerHTML=
+      '<div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">Select files above and click Load fields.</div>';
+  }
+  await loadTemplateList(cfg.active_template||'');
+}
+
+function onFsFileChanged(){
+  var st=document.getElementById('prev-status');
+  var srcFile=document.getElementById('fs-src-sel').value;
+  var tgtFile=document.getElementById('fs-tgt-sel').value;
+  if(srcFile||tgtFile){
+    st.style.color='var(--muted)';
+    st.textContent=(srcFile||'(none)')+' vs '+(tgtFile||'(none)')+' - click Load fields.';
+  }
+}
+
+async function loadFieldsFromSelected(){
+  var st=document.getElementById('prev-status');
+  var srcFile=document.getElementById('fs-src-sel').value;
+  var tgtFile=document.getElementById('fs-tgt-sel').value;
+  if(!srcFile&&!tgtFile){st.style.color='var(--warn)';st.textContent='Select at least one file first.';return;}
+  st.style.color='var(--muted)';st.textContent='Reading column headers...';
+  try{
+    var res=await fetch('/api/fields/from-files',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source_file:srcFile,target_file:tgtFile})
+    });
+    var data=await res.json();
+    if(data.errors&&Object.keys(data.errors).length&&(!data.fields||!data.fields.length)){
+      st.style.color='var(--fail)';st.textContent=Object.values(data.errors).join(' | ');return;
+    }
+    if(!data.fields||!data.fields.length){st.style.color='var(--warn)';st.textContent='No columns found.';return;}
+    renderFieldCheckboxes(data.fields,data);
+    st.style.color='var(--pass)';
+    st.textContent=data.fields.length+' fields loaded - '+
+      data.common+' common'+(data.src_only?', '+data.src_only+' source-only':'')+
+      (data.tgt_only?', '+data.tgt_only+' target-only':'');
+    var info=document.getElementById('fs-file-info');
+    if(info){info.style.display='';info.textContent='Fields from: '+(srcFile||'none')+' vs '+(tgtFile||'none');}
+  }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
+}
+
+// Template management
+async function loadTemplateList(activeTemplate){
+  var templates=await fetch('/api/templates').then(function(r){return r.json();});
+  var el=document.getElementById('template-list');
+  var st=document.getElementById('tmpl-st');
+  if(!templates||!templates.length){
+    el.innerHTML='<div style="background:var(--surface2);border:1px dashed var(--border);'+
+      'border-radius:9px;padding:16px;text-align:center;font-size:12px;color:var(--muted)">'+
+      'No templates uploaded yet. Upload a CSV with one field name per row to get started.</div>';
+    st.textContent='';st.style.color='var(--muted)';
+    return;
+  }
+  el.innerHTML=templates.map(function(t){
+    var isActive=t.is_active||(t.filename===activeTemplate);
+    var preview=(t.fields||[]).slice(0,8).map(function(f){return '<code style="font-size:9px;margin:1px">'+esc(f)+'</code>';}).join(' ')+
+      (t.field_count>8?' <span style="font-size:9px;color:var(--muted)">+'+(t.field_count-8)+' more</span>':'');
+    return '<div class="tmpl-card'+(isActive?' is-active':'')+'">'+
+      '<div class="tmpl-info">'+
+      '<div class="tmpl-name">'+esc(t.filename)+
+      (isActive?'<span class="active-badge">ACTIVE</span>':'')+'</div>'+
+      '<div class="tmpl-meta">'+t.field_count+' fields - '+t.modified+'</div>'+
+      '<div class="tmpl-fields-preview">'+preview+'</div></div>'+
+      '<div class="tmpl-actions">'+
+      (isActive
+        ?'<button class="t-btn deactivate" onclick="deactivateTemplate()">Deactivate</button>'
+        :'<button class="t-btn activate" onclick="activateTemplate(\''+esc(t.filename)+'\')">Activate</button>')+
+      '<button class="t-btn del" onclick="deleteTemplate(\''+esc(t.filename)+'\')">Delete</button>'+
+      '</div></div>';
+  }).join('');
+  var active=templates.filter(function(t){return t.is_active||(t.filename===activeTemplate);})[0];
+  if(active){st.style.color='var(--pass)';st.textContent='Active: '+active.filename+' ('+active.field_count+' fields)';}
+  else{st.style.color='var(--muted)';st.textContent='No template active - validating all fields.';}
+}
+
+async function uploadTemplate(input){
+  if(!input.files||!input.files.length) return;
+  var st=document.getElementById('tmpl-st');
+  st.style.color='var(--muted)';st.textContent='Uploading...';
+  var fd=new FormData();fd.append('file',input.files[0]);
+  try{
+    var res=await fetch('/api/templates/upload',{method:'POST',body:fd});
+    var data=await res.json();
+    if(data.ok){
+      st.style.color='var(--pass)';
+      st.textContent='Uploaded: '+data.filename+' ('+data.field_count+' fields). Click Activate to use it.';
+      toast('Template uploaded: '+data.filename+' ('+data.field_count+' fields)','success');
+      var cfg=await fetch('/api/config').then(function(r){return r.json();});
+      await loadTemplateList(cfg.active_template||'');
+    }else{st.style.color='var(--fail)';st.textContent=data.error||'Upload failed';}
+  }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
+  input.value='';
+}
+
+async function activateTemplate(filename){
+  var st=document.getElementById('tmpl-st');
+  st.style.color='var(--muted)';st.textContent='Activating...';
+  try{
+    var res=await fetch('/api/templates/activate',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:filename})});
+    var data=await res.json();
+    if(data.ok){
+      st.style.color='var(--pass)';st.textContent='Activated: '+filename+' ('+data.field_count+' fields) - re-validating...';
+      toast('Template activated: '+filename,'success');
+      await loadTemplateList(filename);
+      setTimeout(function(){refresh();},1500);
+    }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+  }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
+}
+
+async function deactivateTemplate(){
+  var st=document.getElementById('tmpl-st');
+  st.style.color='var(--muted)';st.textContent='Deactivating...';
+  try{
+    var res=await fetch('/api/templates/activate',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:''})});
+    var data=await res.json();
+    if(data.ok){
+      st.style.color='var(--pass)';st.textContent='Template deactivated - validating all fields.';
+      toast('Template deactivated','info');
+      await loadTemplateList('');
+      setTimeout(function(){refresh();},1500);
+    }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+  }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
+}
+
+async function deleteTemplate(filename){
+  if(!confirm('Delete template "'+filename+'"?')) return;
+  var st=document.getElementById('tmpl-st');
+  try{
+    var res=await fetch('/api/templates/'+encodeURIComponent(filename),{method:'DELETE'});
+    var data=await res.json();
+    if(data.ok){
+      st.style.color='var(--pass)';st.textContent='Template deleted.';
+      toast('Deleted: '+filename,'info');
+      var cfg=await fetch('/api/config').then(function(r){return r.json();});
+      await loadTemplateList(cfg.active_template||'');
+      setTimeout(function(){refresh();},800);
+    }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+  }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
+}
+
+// Field selection checkboxes
+function renderFieldCheckboxes(fields,summary){
+  var grid=document.getElementById('field-checkboxes');
+  var bar=document.getElementById('fs-filter-bar');
+  bar.innerHTML=
+    '<button class="fs-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" '+
+    'onclick="setFsFilter(this,\'all\')">All ('+fields.length+')</button>'+
+    (summary&&summary.common?'<button class="fs-btn" onclick="setFsFilter(this,\'common\')">Common ('+summary.common+')</button>':'')+
+    (summary&&summary.src_only?'<button class="fs-btn" onclick="setFsFilter(this,\'src_only\')">Src only ('+summary.src_only+')</button>':'')+
+    (summary&&summary.tgt_only?'<button class="fs-btn" onclick="setFsFilter(this,\'tgt_only\')">Tgt only ('+summary.tgt_only+')</button>':'');
+  if(!fields||!fields.length){
+    grid.innerHTML='<div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">No fields found.</div>';return;
+  }
+  grid.innerHTML=fields.map(function(f){
+    var lbl=f.label&&f.label!==f.field?f.label:f.field;
+    var tech=f.label&&f.label!==f.field?'<div class="fc-tech">'+esc(f.field)+'</div>':'';
+    var canSel=f.common!==false;
+    var role=f.common?'common':(f.in_source?'src_only':'tgt_only');
+    var sc=f.in_source?'<span style="font-size:8px;background:var(--pass-bg);color:var(--pass);padding:0 4px;border-radius:3px;margin-left:3px">S</span>':'';
+    var tc=f.in_target?'<span style="font-size:8px;background:var(--info-bg);color:var(--info);padding:0 4px;border-radius:3px;margin-left:2px">T</span>':'';
+    return '<label class="fc-item"'+(canSel?'':' style="opacity:.45" title="not in both files"')+
+      ' data-field="'+f.field.toLowerCase()+'" data-label="'+lbl.toLowerCase()+'" data-role="'+role+'">'+
+      '<input type="checkbox" value="'+esc(f.field)+'"'+(f.selected?' checked':'')+(canSel?'':' disabled')+' onchange="updateFsCount()">'+
+      '<span><div class="fc-label">'+esc(lbl)+sc+tc+'</div>'+tech+'</span></label>';
+  }).join('');
+  updateFsCount();
+}
+function setFsFilter(btn,filter){
+  document.querySelectorAll('#fs-filter-bar .fs-btn').forEach(function(b){
+    b.style.background='transparent';b.style.borderColor='var(--border)';b.style.color='var(--muted)';});
+  btn.style.background='var(--accent)';btn.style.borderColor='var(--accent)';btn.style.color='#fff';
+  currentFsFilter=filter;filterFieldCheckboxes();
+}
+function filterFieldCheckboxes(){
+  var q=(document.getElementById('fs-search').value||'').toLowerCase();
+  document.querySelectorAll('#field-checkboxes .fc-item').forEach(function(item){
+    var field=item.dataset.field||'',label=item.dataset.label||'',role=item.dataset.role||'';
+    item.style.display=((currentFsFilter==='all'||currentFsFilter===role)&&(!q||field.indexOf(q)>=0||label.indexOf(q)>=0))?'':'none';
+  });
+}
+function selectAllFields(){document.querySelectorAll('#field-checkboxes input:not(:disabled)').forEach(function(cb){cb.checked=true;});updateFsCount();}
+function clearAllFields(){document.querySelectorAll('#field-checkboxes input:not(:disabled)').forEach(function(cb){cb.checked=false;});updateFsCount();}
+function selectVisible(){document.querySelectorAll('#field-checkboxes .fc-item:not([style*="display: none"]) input:not(:disabled)').forEach(function(cb){cb.checked=true;});updateFsCount();}
+function clearVisible(){document.querySelectorAll('#field-checkboxes .fc-item:not([style*="display: none"]) input:not(:disabled)').forEach(function(cb){cb.checked=false;});updateFsCount();}
+function updateFsCount(){
+  var en=document.querySelectorAll('#field-checkboxes input:not(:disabled)');
+  var ch=document.querySelectorAll('#field-checkboxes input:not(:disabled):checked');
+  document.getElementById('fs-count').textContent=
+    (ch.length===en.length&&en.length>0)?'All fields ('+en.length+')':ch.length+' of '+en.length+' selected';
+}
+function updateThrDisplay(){document.getElementById('thr-display').textContent=document.getElementById('thr-slider').value+'%';}
+async function savePaths(){
+  var st=document.getElementById('path-st');st.textContent='Saving...';
+  var res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({source_dir:document.getElementById('cfg-src').value,
+      target_dir:document.getElementById('cfg-tgt').value})});
+  var data=await res.json();
+  if(data.ok){st.style.color='var(--pass)';st.textContent='Saved - rescanning...';setTimeout(refresh,800);}
+  else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+}
+async function saveThreshold(){
+  var thr=parseFloat(document.getElementById('thr-slider').value);
+  var st=document.getElementById('thr-st');st.textContent='Applying...';
+  var res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pass_threshold:thr})});
+  var data=await res.json();
+  if(data.ok){st.style.color='var(--pass)';st.textContent='Threshold set to '+thr+'% - re-validating...';
+    toast('Threshold: '+thr+'%','info');setTimeout(refresh,800);}
+  else{st.style.color='var(--fail)';st.textContent='Failed';}
+}
+async function saveFieldSelection(){
+  var allEn=document.querySelectorAll('#field-checkboxes input:not(:disabled)');
+  if(allEn.length===0){var st=document.getElementById('field-st');st.style.color='var(--warn)';st.textContent='No fields loaded yet.';return;}
+  var allCh=document.querySelectorAll('#field-checkboxes input:not(:disabled):checked');
+  var selected=[];allCh.forEach(function(cb){selected.push(cb.value);});
+  var toSave=selected.length===allEn.length?[]:selected;
+  var st=document.getElementById('field-st');st.style.color='var(--muted)';st.textContent='Saving...';
+  try{
+    var res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({selected_fields:toSave})});
+    var data=await res.json();
+    if(data.ok){
+      st.style.color='var(--pass)';
+      var lbl=toSave.length?toSave.length+' field(s) selected':'All fields';
+      st.textContent=lbl+' - re-validating...';toast(lbl+' applied','success');
+      setTimeout(refresh,1200);
+    }else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+  }catch(e){st.style.color='var(--fail)';st.textContent='Error: '+e;}
+}
+async function uploadLabels(input){
+  if(!input.files||!input.files.length) return;
+  var st=document.getElementById('lbl-st');st.textContent='Uploading...';
+  var fd=new FormData();fd.append('file',input.files[0]);
+  var res=await fetch('/api/upload/labels',{method:'POST',body:fd});
+  var data=await res.json();
+  if(data.ok){st.style.color='var(--pass)';st.textContent='Labels applied - re-validating...';
+    toast('Custom labels applied','info');setTimeout(refresh,1000);}
+  else{st.style.color='var(--fail)';st.textContent=data.error||'Failed';}
+  input.value='';
+}
+
+// Utilities
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+['log-modal','rep-modal','set-modal','upload-modal','pair-modal'].forEach(function(id){
+  document.getElementById(id).addEventListener('click',function(e){
+    if(e.target===this) this.classList.remove('open');
+  });
+});
+function toast(msg,lvl){
+  lvl=lvl||'info';
+  var el=document.createElement('div');
+  el.className='toast '+lvl;
+  el.innerHTML='<span class="toast-m">'+esc(msg)+'</span>';
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(function(){el.classList.add('rm');setTimeout(function(){el.remove();},230);},5000);
+}
+function card(val,lbl,cls){return '<div class="card '+cls+'"><div class="n">'+val+'</div><div class="l">'+lbl+'</div></div>';}
+function fmt(n){return Number(n).toLocaleString();}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── Join Key Selector ─────────────────────────────────────────────────────────
+var _jkName = '';
+var _jkSelectedKeys = [];
+var _jkAllCols = [];
+
+async function openJoinKeyModal(tableName) {
+  _jkName = tableName;
+  _jkSelectedKeys = [];
+  document.getElementById('jk-modal-name').textContent = tableName;
+  document.getElementById('jk-status').textContent = '';
+  document.getElementById('jk-suggest-status').textContent = '';
+  document.getElementById('jk-suggest-box').style.display = 'none';
+  document.getElementById('jk-search').value = '';
+  document.getElementById('jk-uniqueness-bar').style.display = 'none';
+  document.getElementById('jk-modal').classList.add('open');
+  document.getElementById('jk-col-grid').innerHTML =
+    '<div style="color:var(--muted);font-size:11px;grid-column:1/-1;padding:8px">Loading columns...</div>';
+
+  // Load common columns from the API
+  try {
+    var res  = await fetch('/api/join-keys/' + encodeURIComponent(tableName) + '/columns');
+    var data = await res.json();
+    if (data.error) {
+      document.getElementById('jk-col-grid').innerHTML =
+        '<div style="color:var(--fail);font-size:11px;grid-column:1/-1;padding:8px">' + esc(data.error) + '</div>';
+      return;
+    }
+    _jkAllCols = data.common_columns || [];
+    // Pre-select saved keys
+    _jkSelectedKeys = (data.saved_keys || []).slice();
+    document.getElementById('jk-col-count').textContent =
+      ' (' + _jkAllCols.length + ' common columns)';
+    renderJkColGrid();
+    renderJkSelectedStrip();
+    updateJkUniquenessBar();
+  } catch(e) {
+    document.getElementById('jk-col-grid').innerHTML =
+      '<div style="color:var(--fail);font-size:11px;grid-column:1/-1;padding:8px">Error: ' + esc(String(e)) + '</div>';
+  }
+}
+
+function renderJkSelectedStrip() {
+  var strip = document.getElementById('jk-selected-strip');
+  if (!_jkSelectedKeys.length) {
+    strip.innerHTML = '<span style="font-size:11px;color:var(--muted);font-style:italic">No keys selected &mdash; click columns below to select</span>';
+    return;
+  }
+  strip.innerHTML = _jkSelectedKeys.map(function(k, i) {
+    var col = _jkAllCols.find(function(c) { return c.field === k; });
+    var lbl = col ? (col.label !== col.field ? col.label : col.field) : k;
+    return '<span class="jk-sel-tag">' +
+      (i > 0 ? '<span style="opacity:.5;margin-right:3px;font-size:10px">+</span>' : '') +
+      esc(lbl) + '<small style="opacity:.65;margin-left:3px">' + esc(k) + '</small>' +
+      '<button onclick="removeJkKey(this.dataset.k)" data-k="' + esc(k) + '" title="Remove">&times;</button>' +
+    '</span>';
+  }).join('');
+}
+
+function removeJkKey(k) {
+  _jkSelectedKeys = _jkSelectedKeys.filter(function(x) { return x !== k; });
+  renderJkSelectedStrip();
+  renderJkColGrid();
+  updateJkUniquenessBar();
+}
+
+function renderJkColGrid() {
+  var grid = document.getElementById('jk-col-grid');
+  var q    = (document.getElementById('jk-search').value || '').toLowerCase();
+  var sel  = new Set(_jkSelectedKeys);
+  var cols = _jkAllCols.filter(function(c) {
+    return !q || c.field.toLowerCase().indexOf(q) >= 0 ||
+           (c.label || '').toLowerCase().indexOf(q) >= 0;
+  });
+  if (!cols.length) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:8px;grid-column:1/-1">No columns match.</div>';
+    return;
+  }
+  grid.innerHTML = cols.map(function(c) {
+    var isSelected = sel.has(c.field);
+    var lbl = c.label && c.label !== c.field ? c.label : c.field;
+    var pos = isSelected ? (_jkSelectedKeys.indexOf(c.field) + 1) : null;
+    return '<label class="jk-col-item" style="' + (isSelected ? 'background:var(--accent-light);' : '') + '">' +
+      '<input type="checkbox" value="' + esc(c.field) + '"' + (isSelected ? ' checked' : '') +
+      ' onchange="toggleJkKey(this)">' +
+      '<span style="flex:1">' +
+        '<div style="font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px">' +
+          esc(lbl) +
+          (isSelected ? '<span style="background:var(--accent);color:#fff;border-radius:10px;font-size:9px;padding:0 6px;font-weight:700">#' + pos + '</span>' : '') +
+        '</div>' +
+        (c.label && c.label !== c.field ? '<div style="font-size:9px;color:var(--muted)">' + esc(c.field) + '</div>' : '') +
+      '</span></label>';
+  }).join('');
+}
+
+function filterJkCols() { renderJkColGrid(); }
+
+function toggleJkKey(cb) {
+  var k = cb.value;
+  if (cb.checked) {
+    if (_jkSelectedKeys.indexOf(k) < 0) _jkSelectedKeys.push(k);
+  } else {
+    _jkSelectedKeys = _jkSelectedKeys.filter(function(x) { return x !== k; });
+  }
+  renderJkSelectedStrip();
+  renderJkColGrid();
+  updateJkUniquenessBar();
+}
+
+function updateJkUniquenessBar() {
+  var bar = document.getElementById('jk-uniqueness-bar');
+  bar.style.display = _jkSelectedKeys.length ? 'flex' : 'none';
+  // Clear — live uniqueness is shown after suggest
+  document.getElementById('jk-u-src').textContent = '-';
+  document.getElementById('jk-u-tgt').textContent = '-';
+  document.getElementById('jk-u-note').textContent =
+    _jkSelectedKeys.length ? 'Click Auto-suggest to see uniqueness score' : '';
+}
+
+async function suggestJoinKeys() {
+  var st  = document.getElementById('jk-suggest-status');
+  var box = document.getElementById('jk-suggest-box');
+  st.style.color = 'var(--muted)';
+  st.textContent = 'Analysing file columns...';
+  box.style.display = 'none';
+
+  try {
+    var res  = await fetch('/api/join-keys/' + encodeURIComponent(_jkName) + '/suggest', { method: 'POST' });
+    var data = await res.json();
+    if (!data.ok) { st.style.color = 'var(--fail)'; st.textContent = data.error || 'Failed'; return; }
+
+    var keys   = data.suggested_keys || [];
+    var labels = data.key_labels || {};
+    var scores = data.column_scores || [];
+    var confCls = data.confidence === 'high' ? 'jk-conf-high' :
+                  data.confidence === 'medium' ? 'jk-conf-medium' : 'jk-conf-low';
+
+    // Show uniqueness bar
+    document.getElementById('jk-uniqueness-bar').style.display = 'flex';
+    document.getElementById('jk-u-src').textContent = data.uniqueness_src + '%';
+    document.getElementById('jk-u-tgt').textContent = data.uniqueness_tgt + '%';
+    var uNote = document.getElementById('jk-u-note');
+    var uMin  = Math.min(data.uniqueness_src, data.uniqueness_tgt);
+    uNote.style.color = uMin >= 99 ? 'var(--pass)' : uMin >= 95 ? 'var(--warn)' : 'var(--fail)';
+    uNote.textContent = uMin >= 99 ? 'Excellent — 100% unique records' :
+                        uMin >= 95 ? 'Good — some duplicates remain' : 'Low — records may have duplicates';
+
+    // Show suggestion box with apply button
+    box.style.display = '';
+    box._suggested    = keys;
+    var keyStr = keys.map(function(k) {
+      return '<b>' + esc(labels[k] || k) + '</b>' +
+             (labels[k] && labels[k] !== k ? ' <span style="opacity:.7">(' + esc(k) + ')</span>' : '');
+    }).join(' <span style="opacity:.5">+</span> ');
+
+    // Column uniqueness table
+    var scoreRows = scores.slice(0, 8).map(function(s) {
+      var bar = Math.round(s.src_uniqueness);
+      var bc  = bar >= 90 ? 'var(--pass)' : bar >= 60 ? 'var(--warn)' : 'var(--fail)';
+      return '<tr style="font-size:10px">' +
+        '<td style="padding:3px 8px;font-weight:600">' + esc(s.label !== s.field ? s.label : s.field) + '</td>' +
+        '<td style="padding:3px 8px;font-family:monospace;color:var(--muted)">' + esc(s.field) + '</td>' +
+        '<td style="padding:3px 8px"><div style="display:flex;align-items:center;gap:6px">' +
+          '<div style="height:4px;width:60px;background:var(--border);border-radius:2px">' +
+            '<div style="height:100%;width:' + bar + '%;background:' + bc + ';border-radius:2px"></div>' +
+          '</div>' +
+          '<span style="color:' + bc + ';font-weight:600">' + s.src_uniqueness + '%</span>' +
+          (s.in_suggestion ? '<span style="background:var(--pass-bg);color:var(--pass);font-size:9px;padding:0 5px;border-radius:10px;font-weight:700">suggested</span>' : '') +
+        '</div></td></tr>';
+    }).join('');
+
+    box.innerHTML =
+      '<div style="margin-bottom:8px"><b>Suggested composite key:</b> ' + keyStr + '</div>' +
+      '<div style="font-size:10px;color:var(--pass)">Method: ' + esc(data.detection_method) + ' &nbsp;|&nbsp; ' +
+        '<span class="' + confCls + '">' + data.confidence + ' confidence</span> &nbsp;|&nbsp; ' +
+        'Duplicates: src=' + data.duplicate_src + ' tgt=' + data.duplicate_tgt + '</div>' +
+      (scoreRows ? '<table style="margin-top:8px;width:100%;border-collapse:collapse"><thead>' +
+        '<tr style="font-size:9px;color:var(--muted)"><th style="padding:2px 8px;text-align:left">Label</th>' +
+        '<th style="padding:2px 8px;text-align:left">Field</th>' +
+        '<th style="padding:2px 8px;text-align:left">Uniqueness</th></tr></thead>' +
+        '<tbody>' + scoreRows + '</tbody></table>' : '') +
+      '<button class="save-btn" style="margin-top:10px;font-size:11px;padding:5px 14px" ' +
+        'onclick="applyJkSuggestion()">Use these keys</button>';
+
+    st.style.color  = 'var(--pass)';
+    st.textContent  = keys.length + ' key(s) suggested';
+
+    // Reload column list to show scores
+    if (data.column_scores && data.column_scores.length) {
+      _jkAllCols = data.column_scores.map(function(s) {
+        return { field: s.field, label: s.label };
+      });
+      renderJkColGrid();
+    }
+  } catch(e) {
+    st.style.color = 'var(--fail)';
+    st.textContent = 'Error: ' + e;
+  }
+}
+
+function applyJkSuggestion() {
+  var box = document.getElementById('jk-suggest-box');
+  if (box._suggested && box._suggested.length) {
+    _jkSelectedKeys = box._suggested.slice();
+    renderJkSelectedStrip();
+    renderJkColGrid();
+  }
+}
+
+async function saveJoinKeys() {
+  var st = document.getElementById('jk-status');
+  if (!_jkSelectedKeys.length) {
+    st.style.color = 'var(--warn)';
+    st.textContent = 'Please select at least one join key column.';
+    return;
+  }
+  st.style.color = 'var(--muted)';
+  st.textContent = 'Saving and re-validating...';
+  try {
+    var res  = await fetch('/api/join-keys/' + encodeURIComponent(_jkName), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: _jkSelectedKeys }),
+    });
+    var data = await res.json();
+    if (data.ok) {
+      st.style.color = 'var(--pass)';
+      st.textContent = 'Saved: ' + _jkSelectedKeys.join(' + ') + ' — re-validating...';
+      toast('Join keys set for ' + _jkName + ': ' + _jkSelectedKeys.join(' + '), 'success');
+      setTimeout(function() { closeModal('jk-modal'); refresh(); }, 1000);
+    } else {
+      st.style.color = 'var(--fail)';
+      st.textContent = data.error || 'Failed to save';
+    }
+  } catch(e) {
+    st.style.color = 'var(--fail)';
+    st.textContent = 'Error: ' + e;
+  }
+}
+
+async function clearJoinKeys() {
+  var st = document.getElementById('jk-status');
+  st.style.color = 'var(--muted)';
+  st.textContent = 'Clearing...';
+  try {
+    var res  = await fetch('/api/join-keys/' + encodeURIComponent(_jkName), { method: 'DELETE' });
+    var data = await res.json();
+    if (data.ok) {
+      _jkSelectedKeys = [];
+      renderJkSelectedStrip();
+      renderJkColGrid();
+      st.style.color = 'var(--pass)';
+      st.textContent = 'Cleared — system will auto-suggest on next validation';
+      toast('Join keys cleared for ' + _jkName, 'info');
+      setTimeout(function() { closeModal('jk-modal'); refresh(); }, 1000);
+    } else {
+      st.style.color = 'var(--fail)';
+      st.textContent = data.error || 'Failed';
+    }
+  } catch(e) {
+    st.style.color = 'var(--fail)';
+    st.textContent = 'Error: ' + e;
+  }
+}
+
+document.getElementById('jk-modal').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('open');
+});
+
+init();
+</script>
+</body>
+</html>
