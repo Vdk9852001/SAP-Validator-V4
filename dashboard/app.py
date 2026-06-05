@@ -381,12 +381,33 @@ def run_validation(name, source_path, target_path):
     src_no_jk = [c for c in src_cols if c != jk_upper]
     tgt_no_jk = [c for c in tgt_cols if c != jk_upper]
 
-    # ── Build field mapping (alias + fuzzy, with template filter) ─────────────
+    # ── Build field mapping: source → target ──────────────────────────────────
+    # Forward approach: for each source column find its target equivalent.
+    # The target file drives WHAT gets validated — we use all target columns
+    # as the reference set. selected_fields/template filters which target
+    # columns we care about.
+
+    if selected_fields:
+        sel_upper = set(s.upper() for s in selected_fields)
+        # Filter to target columns the user selected
+        tgt_filtered = [c for c in tgt_no_jk if c in sel_upper]
+        if not tgt_filtered:
+            tgt_filtered = tgt_no_jk  # fallback: all target columns
+        log_event(
+            f"{name}: filtering to {len(tgt_filtered)} of "
+            f"{len(tgt_no_jk)} target columns",
+            "info",
+        )
+    else:
+        tgt_filtered = tgt_no_jk
+
+    # Step 1: forward mapping — finds source col for each source field,
+    # matched against target set (exact + alias + fuzzy)
     mapping_result = build_field_mapping(
         source_cols=src_no_jk,
-        target_cols=tgt_no_jk,
+        target_cols=tgt_filtered,   # only validate fields that exist in target
         object_type=name,
-        selected_fields=selected_fields,   # None = all fields
+        selected_fields=None,       # filtering already done above via tgt_filtered
         custom_labels=custom,
     )
 
@@ -945,12 +966,9 @@ def api_get_config():
     sel    = cfg.get("selected_fields", [])
     sel_set = set(sel)
 
-    # ── Build available_fields from ACTUAL files on disk ─────────────────────
-    # Priority:
-    #   1. Read ALL source + target file headers directly from disk (always fresh)
-    #   2. Fall back to last scan result if no files found on disk
-    # This means the field selector always shows what is ACTUALLY in the files,
-    # not what was in the last scan — which may be a different file entirely.
+    # ── Build available_fields from TARGET file columns (authoritative) ──────
+    # Target file has ALL expected S/4HANA fields — use those as the field list.
+    # Source columns are shown as secondary (S badge) so user can see coverage.
     src_dir, tgt_dir = get_dirs()
     available = []
 
@@ -962,51 +980,37 @@ def api_get_config():
                             if f.suffix.lower() in SUPPORTED_EXT],
                            key=lambda f: f.stat().st_mtime, reverse=True)
 
-        # Use the most recently modified source + target files
         src_path = str(src_files[0]) if src_files else None
         tgt_path = str(tgt_files[0]) if tgt_files else None
 
-        if src_path or tgt_path:
+        if tgt_path or src_path:
             src_cols, tgt_cols = _read_file_headers(src_path or "", tgt_path or "")
             src_set = set(src_cols)
             tgt_set = set(tgt_cols)
-            common   = sorted(src_set & tgt_set)
-            src_only = sorted(src_set - tgt_set)
-            tgt_only = sorted(tgt_set - src_set)
 
-            for col in common:
+            # Target columns are the master list
+            # Mark each as: in_target=True always, in_source=True if also in source
+            for col in sorted(tgt_set):
                 available.append({
                     "field":     col,
                     "label":     get_label(col, custom),
-                    "in_source": True, "in_target": True, "common": True,
+                    "in_source": col in src_set,
+                    "in_target": True,
+                    "common":    col in src_set,
                     "selected":  not sel_set or col in sel_set,
                 })
-            for col in src_only:
+            # Add source-only columns (in source but not target)
+            for col in sorted(src_set - tgt_set):
                 available.append({
                     "field":     col,
                     "label":     get_label(col, custom),
-                    "in_source": True, "in_target": False, "common": False,
+                    "in_source": True,
+                    "in_target": False,
+                    "common":    False,
                     "selected":  False,
                 })
-            for col in tgt_only:
-                available.append({
-                    "field":     col,
-                    "label":     get_label(col, custom),
-                    "in_source": False, "in_target": True, "common": False,
-                    "selected":  False,
-                })
-
-            log_event(
-                f"Config: field list from disk — "
-                f"src={src_files[0].name if src_files else 'none'} "
-                f"({len(src_cols)} cols), "
-                f"tgt={tgt_files[0].name if tgt_files else 'none'} "
-                f"({len(tgt_cols)} cols), "
-                f"{len(common)} common",
-                "info",
-            )
     except Exception as e:
-        log_event(f"Config: could not read file headers — {e}", "warn")
+        log_event(f"Config: could not read file headers from disk — {e}", "warn")
 
     # Fallback to last scan result if disk read produced nothing
     if not available and results_store:
@@ -1124,35 +1128,38 @@ def api_fields_from_files():
 
     src_set  = set(src_cols)
     tgt_set  = set(tgt_cols)
-    common   = sorted(src_set & tgt_set)
-    src_only = sorted(src_set - tgt_set)
-    tgt_only = sorted(tgt_set - src_set)
 
     fields = []
-    for col in common:
+    # TARGET columns are the master list — show all target fields first
+    for col in sorted(tgt_set):
         fields.append({
-            "field": col, "label": get_label(col, custom),
-            "in_source": True, "in_target": True, "common": True,
-            "selected": not sel_set or col in sel_set,
+            "field":     col,
+            "label":     get_label(col, custom),
+            "in_source": col in src_set,
+            "in_target": True,
+            "common":    col in src_set,
+            "selected":  not sel_set or col in sel_set,
         })
-    for col in src_only:
+    # Source-only columns (in source but not in target)
+    for col in sorted(src_set - tgt_set):
         fields.append({
-            "field": col, "label": get_label(col, custom),
-            "in_source": True, "in_target": False, "common": False,
-            "selected": False,
-        })
-    for col in tgt_only:
-        fields.append({
-            "field": col, "label": get_label(col, custom),
-            "in_source": False, "in_target": True, "common": False,
-            "selected": False,
+            "field":     col,
+            "label":     get_label(col, custom),
+            "in_source": True,
+            "in_target": False,
+            "common":    False,
+            "selected":  False,
         })
 
+    common   = len(src_set & tgt_set)
+    src_only = len(src_set - tgt_set)
+    tgt_only = len(tgt_set - src_set)
+
     log_event(
-        f"Fields loaded from files: "
+        f"Fields from files: "
         f"src={src_name}({len(src_cols)}) "
         f"tgt={tgt_name}({len(tgt_cols)}) "
-        f"→ {len(common)} common, {len(src_only)} src-only, {len(tgt_only)} tgt-only",
+        f"→ {common} common, {src_only} src-only, {tgt_only} tgt-only",
         "info",
     )
 
@@ -1160,9 +1167,9 @@ def api_fields_from_files():
         "fields":      fields,
         "src_count":   len(src_cols),
         "tgt_count":   len(tgt_cols),
-        "common":      len(common),
-        "src_only":    len(src_only),
-        "tgt_only":    len(tgt_only),
+        "common":      common,
+        "src_only":    src_only,
+        "tgt_only":    tgt_only,
         "errors":      errors,
         "source_file": src_name,
         "target_file": tgt_name,
