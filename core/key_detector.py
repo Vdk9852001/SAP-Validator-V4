@@ -26,9 +26,19 @@ import pandas as pd
 
 SAP_KEY_CATALOGUE = {
     # Condition / Pricing records
-    "CONDITION":    ["KSCHL","MATNR","KUNNR","LIFNR","VKORG","VTWEG","SPART","WERKS","DATAB","DATBI","PLTYP"],
+    # Sales conditions (SD): keyed by KSCHL + MATNR + sales org/channel
+    # Purchasing conditions (MM): keyed by KSCHL + MATNR + EKORG (purchasing org)
+    # Both variants included so EKORG is always tried alongside VKORG
+    "CONDITION":    ["KSCHL","MATNR","EKORG","LIFNR","KUNNR","VKORG","VTWEG",
+                     "SPART","WERKS","DATAB","DATBI","PLTYP"],
+    "COND_MM":      ["KSCHL","MATNR","EKORG","LIFNR","WERKS","DATAB","DATBI"],
+    "COND_SD":      ["KSCHL","MATNR","KUNNR","VKORG","VTWEG","SPART","DATAB","DATBI"],
     "KONP":         ["KNUMH","KOPOS"],
     "KONV":         ["KNUMV","KPOSN","STUNR","ZAEHK"],
+    # Purchasing price conditions (A-tables for MM)
+    "A016":         ["KSCHL","MATNR","LIFNR","EKORG","DATAB"],
+    "A017":         ["KSCHL","MATNR","EKORG","DATAB"],
+    "A018":         ["KSCHL","LIFNR","EKORG","DATAB"],
     "A304":         ["KSCHL","MATNR","VKORG","VTWEG","DATAB"],
     "A305":         ["KSCHL","KUNNR","MATNR","VKORG","VTWEG","DATAB"],
 
@@ -221,29 +231,55 @@ def _uniqueness(df: pd.DataFrame, cols: List[str]) -> tuple:
 
 
 def _catalogue_candidates(object_name: str, common_cols: List[str]) -> List[str]:
-    """Return catalogue key columns that exist in common_cols, for the best matching object."""
+    """
+    Return catalogue key columns that exist in common_cols, for the best matching object.
+
+    Matching priority:
+      1. Exact object name match  (CONDITION → CONDITION)
+      2. Name contains match      (MY_CONDITION_DATA → CONDITION)
+      3. Best overlap score       — picks the entry whose candidate columns
+                                    overlap most with what is actually in the file
+                                    This ensures COND_MM wins over COND_SD when
+                                    the file has EKORG but not VKORG, and vice versa.
+    """
     if not object_name:
         return []
-    name = object_name.upper().replace("-", "_").replace(" ", "_")
+    name       = object_name.upper().replace("-", "_").replace(" ", "_")
     common_set = set(common_cols)
 
-    # Direct match
-    for key in SAP_KEY_CATALOGUE:
-        if key in name or name in key:
-            candidates = [c for c in SAP_KEY_CATALOGUE[key] if c in common_set]
-            if candidates:
-                return candidates
+    # Step 1: direct or partial name match — collect all matching entries
+    matched_entries = []
+    for key, cols in SAP_KEY_CATALOGUE.items():
+        if key == name or key in name or name in key:
+            overlap = [c for c in cols if c in common_set]
+            if overlap:
+                matched_entries.append((len(overlap), key, overlap, cols))
 
-    # Partial match — longest match wins
-    matches = []
+    if matched_entries:
+        # Among matching entries, pick the one with the most columns
+        # actually present in the file — this selects COND_MM (has EKORG)
+        # over COND_SD (has VKORG) when the file contains EKORG.
+        matched_entries.sort(key=lambda x: -x[0])
+        best_overlap, best_key, best_cols, full_cols = matched_entries[0]
+
+        # If multiple entries tied on overlap count, prefer the one whose
+        # first candidate column (highest priority key) is in the file
+        top = [e for e in matched_entries if e[0] == best_overlap]
+        for entry in top:
+            if entry[2] and entry[2][0] in common_set:
+                return entry[2]
+        return best_cols
+
+    # Step 2: no name match — score ALL catalogue entries by column overlap
+    scores = []
     for key, cols in SAP_KEY_CATALOGUE.items():
         overlap = [c for c in cols if c in common_set]
-        if overlap:
-            matches.append((len(overlap), key, overlap))
+        if len(overlap) >= 2:   # need at least 2 matching cols to be meaningful
+            scores.append((len(overlap), key, overlap))
 
-    if matches:
-        matches.sort(reverse=True)
-        return matches[0][2]
+    if scores:
+        scores.sort(reverse=True)
+        return scores[0][2]
 
     return []
 
