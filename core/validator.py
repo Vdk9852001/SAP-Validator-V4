@@ -35,6 +35,7 @@ class FieldResult:
     missing_in_target: int
     missing_in_source: int
     is_numeric:        bool  = False
+    is_key_field:      bool  = False   # True when this field is a join key
     tolerance_used:    float = None
     pass_threshold:    float = DEFAULT_PASS_THRESHOLD
     mismatch_details:  list  = field(default_factory=list)
@@ -314,14 +315,18 @@ class MaterialValidator:
         if dup_src_count > 0:
             dup_samples = src_df[src_dup_mask].head(10)[join_keys].to_dict("records")
 
-        # ── Step 7: Remove join keys from field validation map ─────────────────
-        jk_set    = set(join_keys)
-        field_map = {s: t for s, t in field_map.items()
-                     if s not in jk_set and t not in jk_set
-                     and s in src_df.columns and t in tgt_df.columns}
+        # ── Step 7: Separate join keys from regular fields ────────────────────
+        # Join key fields ARE validated (value comparison across matched records)
+        # but displayed with a special "KEY" badge in the dashboard.
+        jk_set         = set(join_keys)
+        key_field_map  = {k: k for k in join_keys
+                          if k in src_df.columns and k in tgt_df.columns}
+        data_field_map = {s: t for s, t in field_map.items()
+                          if s not in jk_set and t not in jk_set
+                          and s in src_df.columns and t in tgt_df.columns}
 
-        # ── Step 8: Numeric detection ──────────────────────────────────────────
-        pairs   = list(field_map.items())
+        # ── Step 8: Numeric detection (data fields only) ──────────────────────
+        pairs   = list(data_field_map.items())
         tol_map = self._detect_numeric_mapped(src_df, tgt_df, pairs)
         tol_map.update(self.tolerance_overrides)
 
@@ -330,7 +335,7 @@ class MaterialValidator:
         mapping_report = MappingReport(
             join_keys=join_keys,
             join_key_labels={k: get_label(k, self.custom_labels) for k in join_keys},
-            matched_fields=list(field_map.keys()),
+            matched_fields=list(data_field_map.keys()),
             source_only_fields=sorted(set(src_hdrs) - set(tgt_hdrs) - jk_set),
             target_only_fields=sorted(set(tgt_hdrs) - set(src_hdrs) - jk_set),
             numeric_fields=sorted(tol_map.keys()),
@@ -341,13 +346,26 @@ class MaterialValidator:
             pass_threshold=self.pass_threshold,
         )
 
-        # ── Step 10: Validate each field with 2-column merge ──────────────────
+        # ── Step 10: Validate each field ──────────────────────────────────────
         field_results = []
-        for src_col, tgt_col in field_map.items():
+
+        # First: validate join key fields (marked as key fields)
+        for src_col in join_keys:
+            tgt_col = key_field_map.get(src_col, src_col)
+            fr = self._validate_field_fast(
+                src_df, tgt_df, src_col, tgt_col,
+                join_keys, None, max_mismatch_rows,
+                is_key_field=True,
+            )
+            if fr:
+                field_results.append(fr)
+
+        # Then: validate data fields
+        for src_col, tgt_col in data_field_map.items():
             tolerance = tol_map.get(src_col)
             fr = self._validate_field_fast(
                 src_df, tgt_df, src_col, tgt_col,
-                join_keys, tolerance, max_mismatch_rows
+                join_keys, tolerance, max_mismatch_rows,
             )
             if fr:
                 field_results.append(fr)
@@ -376,7 +394,7 @@ class MaterialValidator:
     def _validate_field_fast(
         self,
         src_df, tgt_df, src_col, tgt_col, join_keys,
-        tolerance, max_rows,
+        tolerance, max_rows, is_key_field=False,
     ):
         if src_col not in src_df.columns or tgt_col not in tgt_df.columns:
             return None
@@ -400,8 +418,8 @@ class MaterialValidator:
                 field_source=src_col, field_target=tgt_col,
                 field_label=self._label(src_col), total_records=0,
                 matched=0, mismatched=0, missing_in_target=0, missing_in_source=0,
-                is_numeric=(tolerance is not None), tolerance_used=tolerance,
-                pass_threshold=self.pass_threshold,
+                is_numeric=(tolerance is not None), is_key_field=is_key_field,
+                tolerance_used=tolerance, pass_threshold=self.pass_threshold,
             )
 
         sv = m[sv_col]
@@ -495,8 +513,9 @@ class MaterialValidator:
             field_label=self._label(src_col),
             total_records=total, matched=matched, mismatched=mismatched,
             missing_in_target=miss_tgt_count, missing_in_source=miss_src_count,
-            is_numeric=(tolerance is not None), tolerance_used=tolerance,
-            pass_threshold=self.pass_threshold, mismatch_details=mismatches,
+            is_numeric=(tolerance is not None), is_key_field=is_key_field,
+            tolerance_used=tolerance, pass_threshold=self.pass_threshold,
+            mismatch_details=mismatches,
         )
 
     # ── File loading ──────────────────────────────────────────────────────────
